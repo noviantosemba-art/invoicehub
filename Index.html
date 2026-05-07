@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>krankuindonesia - ERP</title>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#0f172a', // slate-900
+                        primaryHover: '#1e293b', // slate-800
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Custom Scrollbar for modern look */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+
+        /* Modal Transitions */
+        .modal-overlay {
+            transition: opacity 0.2s ease-in-out;
+        }
+        .modal-content {
+            transition: transform 0.2s ease-in-out;
+        }
+        
+        /* Hidden Class overrides for page routing */
+        .page-view.hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-300">
+
+    <!-- LOGIN OVERLAY (Light Mode) -->
+    <div id="loginOverlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-gradient-to-br from-slate-100 via-white to-slate-50">
+        <div class="w-full max-w-sm mx-4">
+            <!-- Logo Card -->
+            <div class="bg-white border border-slate-200 rounded-3xl p-8 shadow-xl">
+                <div class="text-center mb-8">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4">
+                        <img src="https://drive.google.com/open?id=1WBda2dfHYhC08huLRh92EBc6WlNkndT0&usp=drive_fs" alt="Logo" class="h-12 w-auto object-contain">
+                    </div>
+                    <h1 class="text-2xl font-bold text-slate-900 tracking-tight">krankuindonesia</h1>
+                    <p class="text-slate-400 text-sm mt-1">Enterprise Resource Planning</p>
+                </div>
+                <form id="formLogin" onsubmit="handleLogin(event)">
+                    <div class="mb-4">
+                        <label class="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wider">Username</label>
+                        <input type="text" id="login_username" required autocomplete="username"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 outline-none text-sm transition-all"
+                            placeholder="Masukkan username">
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-xs font-medium text-slate-500 mb-1.5 uppercase tracking-wider">Password</label>
+                        <input type="password" id="login_password" required autocomplete="current-password"
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400 outline-none text-sm transition-all"
+                            placeholder="Masukkan password">
+                    </div>
+                    <div id="login_error" class="hidden mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm text-center"></div>
+                    <button type="submit" id="btnLogin"
+                        class="w-full py-3 bg-slate-900 text-white font-semibold rounded-xl hover:bg-slate-800 transition-all duration-200 text-sm flex items-center justify-center gap-2">
+                        <i data-lucide="log-in" class="w-4 h-4"></i> Masuk
+                    </button>
+                </form>
+            </div>
+            <p class="text-center text-slate-400 text-xs mt-4">&copy; 2026 krankuindonesia. All rights reserved.</p>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <nav id="sidebar" class="fixed left-0 top-0 w-64 h-screen bg-white dark:bg-slate-800 border-r border-slate-100 dark:border-slate-700 transition-transform duration-300 z-40 transform -translate-x-full md:translate-x-0 shadow-sm flex flex-col">
+        <div class="flex items-center gap-3 px-6 py-5 border-b border-slate-100 dark:border-slate-700">
+            <img src="https://drive.google.com/open?id=1WBda2dfHYhC08huLRh92EBc6WlNkndT0&usp=drive_fs" alt="Logo" class="h-8 w-auto object-contain">
+            <span class="font-bold text-xl tracking-tight text-slate-900 dark:text-white">krankuindonesia</span>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto py-4 px-3 flex flex-col gap-1">
+            <a class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer active-nav" data-page="dashboard">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Dashboard
+            </a>
+            <a class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" data-page="invoice">
+                <i data-lucide="receipt" class="w-5 h-5"></i> Invoice Penjualan
+            </a>
+            <a class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" data-page="history">
+                <i data-lucide="history" class="w-5 h-5"></i> Riwayat Penjualan
+            </a>
+            <a class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" data-page="inventory">
+                <i data-lucide="package" class="w-5 h-5"></i> Manajemen Stock
+            </a>
+            <a class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" data-page="finance">
+                <i data-lucide="wallet" class="w-5 h-5"></i> Keuangan & Arus Kas
+            </a>
+            <a class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" data-page="returns">
+                <i data-lucide="corner-up-left" class="w-5 h-5"></i> Retur & Penyesuaian
+            </a>
+            <a class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer" data-page="master">
+                <i data-lucide="settings" class="w-5 h-5"></i> Settings
+            </a>
+        </div>
+    </nav>
+    
+    <!-- Sidebar Overlay for Mobile -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-slate-900/50 z-30 hidden md:hidden"></div>
+
+    <!-- Main Content -->
+    <div id="main-content" class="md:ml-64 p-4 md:p-8 min-h-screen transition-all duration-300 flex flex-col">
+        <!-- Top Navbar -->
+        <header class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 px-6 py-4 mb-8 flex justify-between items-center transition-colors duration-300">
+            <div class="flex items-center gap-4">
+                <button id="sidebarToggle" class="md:hidden p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+                <h4 id="pageTitle" class="text-xl font-semibold text-slate-800 dark:text-slate-100 m-0">Dashboard</h4>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <!-- Loading Spinner -->
+                <div id="globalSpinner" class="hidden">
+                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin text-slate-900 dark:text-slate-100"></i>
+                </div>
+                
+                <!-- Theme Toggle -->
+                <button id="themeToggle" class="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors" title="Toggle Dark/Light Mode">
+                    <i data-lucide="moon" id="themeIcon" class="w-5 h-5"></i>
+                </button>
+                
+                <!-- Profile -->
+                <div class="relative group">
+                    <button class="flex items-center justify-center w-9 h-9 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                        <i data-lucide="user" class="w-5 h-5"></i>
+                    </button>
+                    <!-- Dropdown -->
+                    <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-100 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                        <div class="py-2">
+                            <a href="#" class="block px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Profile Settings</a>
+                            <div class="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
+                            <a href="#" onclick="handleLogout()" class="block px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Page Content Area -->
+        <div id="app-content" class="flex-1">
+            
+            <!-- DASHBOARD VIEW -->
+            <div id="view-dashboard" class="page-view block">
+                
+                <!-- GLOBAL DATE FILTER -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-4 mb-6">
+                    <div class="flex flex-col md:flex-row items-center gap-4">
+                        <div class="flex items-center gap-2 font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            <i data-lucide="filter" class="w-4 h-4"></i> Filter Periode
+                        </div>
+                        <input type="date" id="dash_filter_start" class="px-3 py-1.5 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm w-full md:w-auto">
+                        <span class="text-slate-400 text-sm">s/d</span>
+                        <input type="date" id="dash_filter_end" class="px-3 py-1.5 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm w-full md:w-auto">
+                        
+                        <div class="flex flex-wrap gap-2 w-full md:w-auto">
+                            <button onclick="setDashFilterHariIni()" class="px-3 py-1.5 text-sm font-medium border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Hari Ini</button>
+                            <button onclick="setDashFilterBulanIni()" class="px-3 py-1.5 text-sm font-medium border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Bulan Ini</button>
+                            <button onclick="setDashFilterTahunIni()" class="px-3 py-1.5 text-sm font-medium border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Tahun Ini</button>
+                        </div>
+                        <button onclick="applyDashboardFilter()" class="md:ml-auto w-full md:w-auto px-4 py-1.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors text-sm">Terapkan</button>
+                    </div>
+                </div>
+
+                <!-- STATS CARDS -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                    <!-- A. Total Penjualan -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 flex justify-between items-start">
+                        <div>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Total Penjualan</p>
+                            <h3 class="text-2xl font-bold text-slate-800 dark:text-slate-100">Rp <span id="dash-omset">0</span></h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                            <i data-lucide="trending-up" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- B. Margin Kotor -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 flex justify-between items-start">
+                        <div>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Margin Kotor</p>
+                            <h3 class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">Rp <span id="dash-laba-kotor">0</span></h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                            <i data-lucide="banknote" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- C. Margin Bersih -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 flex justify-between items-start">
+                        <div>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Margin Bersih</p>
+                            <h3 class="text-2xl font-bold text-blue-600 dark:text-blue-400">Rp <span id="dash-laba-bersih">0</span></h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                            <i data-lucide="piggy-bank" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+
+                    <!-- D. Total Invoice -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 flex justify-between items-start">
+                        <div>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Total Invoice</p>
+                            <h3 class="text-2xl font-bold text-slate-700 dark:text-slate-200"><span id="dash-total-invoice">0</span></h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400">
+                            <i data-lucide="receipt-text" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+
+                    <!-- E. Total Retur -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 flex justify-between items-start">
+                        <div>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Total Retur Item</p>
+                            <h3 class="text-2xl font-bold text-red-600 dark:text-red-400"><span id="dash-total-retur">0</span></h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-red-600 dark:text-red-400">
+                            <i data-lucide="corner-up-left" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- F. Aset Gudang -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 flex justify-between items-start">
+                        <div>
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Aset Gudang <span class="font-normal text-xs">(Real-time)</span></p>
+                            <h3 class="text-2xl font-bold text-amber-500 dark:text-amber-400">Rp <span id="dash-aset">0</span></h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-xl bg-slate-50 dark:bg-slate-700 flex items-center justify-center text-amber-500 dark:text-amber-400">
+                            <i data-lucide="package" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHARTS & TABLES -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <h5 class="text-lg font-semibold mb-6 text-slate-800 dark:text-slate-100">Tren Penjualan (Omset)</h5>
+                        <div class="relative h-[300px] w-full">
+                            <canvas id="chartTrenPenjualan"></canvas>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <h5 class="text-lg font-semibold mb-6 text-slate-800 dark:text-slate-100">5 Produk Terlaris</h5>
+                        <div class="overflow-x-auto rounded-xl">
+                            <table class="w-full text-sm text-left">
+                                <thead class="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-700 dark:text-slate-400 border-b border-slate-200 dark:border-slate-600">
+                                    <tr>
+                                        <th class="px-4 py-3 font-medium">Produk</th>
+                                        <th class="px-4 py-3 font-medium text-right">Qty Terjual</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-top-products" class="divide-y divide-slate-100 dark:divide-slate-700">
+                                    <!-- Rendered by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INVENTORY VIEW -->
+            <div id="view-inventory" class="page-view hidden">
+                <!-- TOP: Summary Cards (Always Visible) -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <p class="text-slate-500 dark:text-slate-400 font-medium text-sm mb-1">Total Valuasi Gudang</p>
+                        <h2 class="text-3xl font-bold text-indigo-600 dark:text-indigo-400">Rp <span id="inv-total-valuasi">0</span></h2>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <p class="text-slate-500 dark:text-slate-400 font-medium text-sm mb-3">5 Produk Stok Krisis</p>
+                        <div id="card-stok-krisis" class="space-y-1.5 text-sm"><p class="text-slate-400 text-xs">Memuat...</p></div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <p class="text-slate-500 dark:text-slate-400 font-medium text-sm mb-3">Total Retur</p>
+                        <div class="flex gap-6">
+                            <div><p class="text-xs text-slate-400 uppercase tracking-wider mb-0.5">Rusak</p><h3 class="text-2xl font-bold text-rose-600 dark:text-rose-400" id="card-retur-rusak">0</h3></div>
+                            <div><p class="text-xs text-slate-400 uppercase tracking-wider mb-0.5">Masuk Stok Kembali</p><h3 class="text-2xl font-bold text-emerald-600 dark:text-emerald-400" id="card-retur-bagus">0</h3></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <div class="flex flex-wrap gap-3">
+                        <button onclick="openModalProduk()" class="px-4 py-2 border border-slate-200 dark:border-slate-600 font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 text-sm"><i data-lucide="plus" class="w-4 h-4"></i> Tambah Produk Baru</button>
+                        <button onclick="openModalInbound()" class="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors flex items-center gap-2 text-sm"><i data-lucide="plus" class="w-4 h-4"></i> Stok Masuk Baru</button>
+                    </div>
+                </div>
+
+                <!-- BOTTOM: Nav Tabs -->
+                <div class="border-b border-slate-200 dark:border-slate-700 mb-6">
+                    <ul class="flex gap-6 -mb-px">
+                        <li><button onclick="switchTab('tab-inv-ringkasan','inv')" class="tab-btn-inv px-1 pb-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600" data-tab="tab-inv-ringkasan">Ringkasan Stok (FIFO)</button></li>
+                        <li><button onclick="switchTab('tab-inv-inbound','inv')" class="tab-btn-inv px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-inv-inbound">Riwayat Inbound Stok</button></li>
+                    </ul>
+                </div>
+
+                <!-- Tab Content: Ringkasan Stok -->
+                <div id="tab-inv-ringkasan" class="tab-content-inv">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                            <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Ringkasan Stok (FIFO)</h5>
+                        </div>
+                        <div class="mb-4"><div class="relative"><i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i><input type="text" id="filter-inventory-summary" oninput="filterInventorySummary()" placeholder="Cari produk berdasarkan nama atau ID..." class="w-full pl-10 pr-4 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm"></div></div>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30">
+                                    <tr><th class="px-4 py-3 font-medium">ID Produk</th><th class="px-4 py-3 font-medium">Nama Produk</th><th class="px-4 py-3 font-medium">Harga Jual Default</th><th class="px-4 py-3 font-medium">Total Stok (Qty)</th><th class="px-4 py-3 font-medium">Total Nilai Aset</th></tr>
+                                </thead>
+                                <tbody id="tbody-inventory-summary" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                            </table>
+                        </div>
+                        <div id="pagination-inventory-summary" class="mt-4 flex justify-between items-center text-sm text-slate-500"></div>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Riwayat Inbound -->
+                <div id="tab-inv-inbound" class="tab-content-inv hidden">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <h5 class="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">Riwayat Inbound Stok</h5>
+                        <div class="mb-4"><div class="relative"><i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i><input type="text" id="filter-inbound-history" oninput="filterInboundHistory()" placeholder="Cari berdasarkan produk, ID Batch, No PO, atau Supplier..." class="w-full pl-10 pr-4 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm"></div></div>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30">
+                                    <tr><th class="px-4 py-3 font-medium">Tanggal</th><th class="px-4 py-3 font-medium">ID Batch</th><th class="px-4 py-3 font-medium">Nama Supplier</th><th class="px-4 py-3 font-medium">No Invoice</th><th class="px-4 py-3 font-medium">Produk</th><th class="px-4 py-3 font-medium">Qty Masuk</th><th class="px-4 py-3 font-medium">Qty Sisa</th><th class="px-4 py-3 font-medium">Harga Beli kotor</th><th class="px-4 py-3 font-medium">Diskon</th><th class="px-4 py-3 font-medium">Final HPP</th><th class="px-4 py-3 font-medium">Aksi</th></tr>
+                                </thead>
+                                <tbody id="tbody-inbound" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                            </table>
+                        </div>
+                        <div id="pagination-inbound-stok" class="mt-4 flex justify-between items-center text-sm text-slate-500"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MASTER VIEW -->
+            <div id="view-master" class="page-view hidden">
+                <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-6">Pengaturan</h5>
+                <div class="border-b border-slate-200 dark:border-slate-700 mb-6">
+                    <ul class="flex gap-6 -mb-px">
+                        <li><button onclick="switchTab('tab-set-toko','set')" class="tab-btn-set px-1 pb-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600" data-tab="tab-set-toko">Data Master Toko</button></li>
+                        <li><button onclick="switchTab('tab-set-produk','set')" class="tab-btn-set px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-set-produk">Data Master Produk</button></li>
+                        <li><button onclick="switchTab('tab-set-user','set')" class="tab-btn-set px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-set-user">Manajemen Pengguna</button></li>
+                    </ul>
+                </div>
+                <div id="tab-set-toko" class="tab-content-set">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Data Master Toko</h5>
+                            <button onclick="openModalToko()" class="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors flex items-center gap-2 text-sm"><i data-lucide="plus" class="w-4 h-4"></i> Tambah Toko</button>
+                        </div>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">ID Toko</th><th class="px-4 py-3 font-medium">Marketplace</th><th class="px-4 py-3 font-medium">Nama Toko</th><th class="px-4 py-3 font-medium">Fee E-Com</th><th class="px-4 py-3 font-medium">Fee Ongkir</th><th class="px-4 py-3 font-medium">Max Ongkir</th><th class="px-4 py-3 font-medium">Fee Promo</th><th class="px-4 py-3 font-medium">Max Promo</th><th class="px-4 py-3 font-medium">Aksi</th></tr></thead>
+                                <tbody id="tbody-master-toko" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div id="tab-set-produk" class="tab-content-set hidden">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Data Master Produk</h5>
+                            <button onclick="openModalProduk()" class="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors flex items-center gap-2 text-sm"><i data-lucide="plus" class="w-4 h-4"></i> Tambah Produk</button>
+                        </div>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">ID Produk</th><th class="px-4 py-3 font-medium">Nama Produk</th><th class="px-4 py-3 font-medium">Harga Jual Default</th><th class="px-4 py-3 font-medium">Aksi</th></tr></thead>
+                                <tbody id="tbody-master-produk" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div id="tab-set-user" class="tab-content-set hidden">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <h5 class="text-lg font-semibold mb-6 text-slate-800 dark:text-slate-100">Manajemen Pengguna (User Access)</h5>
+                        <form id="formAddUser" onsubmit="saveNewUser(event)" class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+                            <input type="text" id="user_username" required placeholder="Username" class="px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm">
+                            <input type="password" id="user_password" required placeholder="Password" class="px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm">
+                            <select id="user_role" required class="px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm"><option value="Admin">Admin</option><option value="Staff">Staff</option><option value="Viewer">Viewer</option></select>
+                            <button type="submit" class="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors flex items-center justify-center gap-2 text-sm" id="btnSaveUser"><i data-lucide="user-plus" class="w-4 h-4"></i> Tambah User</button>
+                        </form>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Username</th><th class="px-4 py-3 font-medium">Role</th><th class="px-4 py-3 font-medium">Aksi</th></tr></thead>
+                                <tbody id="tbody-master-user" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- INVOICE VIEW -->
+            <div id="view-invoice" class="page-view hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 flex flex-col gap-6">
+                        <!-- Keranjang Belanja -->
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 h-full flex flex-col">
+                            <h5 class="text-lg font-semibold mb-6 text-slate-800 dark:text-slate-100">Item Pesanan</h5>
+                            <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700 mb-6 flex-1">
+                                <table class="w-full text-sm text-left">
+                                    <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30">
+                                        <tr>
+                                            <th class="px-4 py-3 font-medium">Produk</th>
+                                            <th class="px-4 py-3 font-medium w-24">Qty</th>
+                                            <th class="px-4 py-3 font-medium w-36">Harga Jual</th>
+                                            <th class="px-4 py-3 font-medium">Subtotal</th>
+                                            <th class="px-4 py-3 font-medium w-12"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="invoice-items" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                        <!-- Rendered by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="mt-auto">
+                                <button onclick="addInvoiceItemRow()" class="px-4 py-2 border border-slate-200 dark:border-slate-600 font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2 text-sm w-max">
+                                    <i data-lucide="plus-circle" class="w-4 h-4"></i> Tambah Item
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-span-1">
+                        <!-- Ringkasan & Form -->
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                            <h5 class="text-lg font-semibold mb-6 text-slate-800 dark:text-slate-100">Detail Transaksi</h5>
+                            <form id="formInvoice" onsubmit="saveInvoice(event)">
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-slate-500 mb-1">Tanggal</label>
+                                    <input type="date" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="inv_tanggal" required>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-500 mb-1">Marketplace</label>
+                                        <select class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="inv_marketplace" required onchange="onMarketplaceChange()">
+                                            <option value="">-- Pilih --</option>
+                                            <option value="Shopee">Shopee</option>
+                                            <option value="TikTok">TikTok</option>
+                                            <option value="Lazada">Lazada</option>
+                                            <option value="Offline">Offline</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-500 mb-1">Nama Toko</label>
+                                        <select class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm disabled:opacity-50" id="inv_toko" onchange="calculateInvoice()" disabled>
+                                            <option value="">-- Pilih --</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-500 mb-1">Shift</label>
+                                        <select class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="inv_shift" required>
+                                            <option value="09:00">09:00</option>
+                                            <option value="13:00">13:00</option>
+                                            <option value="15:00">15:00</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <hr class="border-slate-100 dark:border-slate-700 my-4">
+                                <div class="flex justify-between items-center mb-3 text-sm">
+                                    <span class="text-slate-500">Total Omset (Kotor)</span>
+                                    <strong id="inv_summary_omset" class="text-slate-800 dark:text-slate-100">Rp 0</strong>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-500 mb-1">Jumlah Resi</label>
+                                        <input type="number" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="inv_jumlah_resi" value="0" min="0" oninput="calculateInvoice()">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-500 mb-1">Biaya Pelayanan</label>
+                                        <input type="number" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg outline-none text-sm disabled:opacity-50" id="inv_biaya_pelayanan" value="0" readonly>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-slate-500 mb-1">Biaya Lain-lain (Rp)</label>
+                                    <input type="number" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="inv_biaya_lain" value="0" min="0" oninput="calculateInvoice()">
+                                </div>
+                                <div id="inv_online_fees_container" class="hidden">
+                                    <div class="flex justify-between items-center mb-2 text-xs text-red-500">
+                                        <span>Fee E-Commerce</span>
+                                        <span id="inv_summary_fee_ecommerce">- Rp 0</span>
+                                    </div>
+                                    <div class="flex justify-between items-center mb-2 text-xs text-red-500">
+                                        <span>Fee Gratis Ongkir</span>
+                                        <span id="inv_summary_fee_ongkir">- Rp 0</span>
+                                    </div>
+                                    <div class="flex justify-between items-center mb-4 text-xs text-red-500">
+                                        <span>Fee Promo Extra</span>
+                                        <span id="inv_summary_fee_promo_extra">- Rp 0</span>
+                                    </div>
+                                </div>
+                                <hr class="border-slate-100 dark:border-slate-700 my-4">
+                                <div class="flex justify-between items-center mb-6">
+                                    <span class="font-semibold text-lg text-slate-800 dark:text-slate-100">Penerimaan Bersih</span>
+                                    <strong class="text-xl text-blue-600 dark:text-blue-400" id="inv_summary_laba">Rp 0</strong>
+                                </div>
+                                <button type="submit" class="w-full py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-xl hover:bg-slate-800 dark:hover:bg-white transition-colors flex justify-center items-center gap-2" id="btnSaveInvoice">
+                                    <i data-lucide="check-circle" class="w-5 h-5"></i> Proses Transaksi
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FINANCE VIEW -->
+            <div id="view-finance" class="page-view hidden">
+                <!-- TOP: Always Visible -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Ringkasan Keuangan</h5>
+                    <div class="flex gap-2">
+                        <button onclick="openModalTambahModal()" class="px-4 py-2 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 text-sm"><i data-lucide="landmark" class="w-4 h-4"></i> + Tambah Modal</button>
+                        <button onclick="openModalPengeluaran()" class="px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors flex items-center gap-2 text-sm"><i data-lucide="plus" class="w-4 h-4"></i> Catat Pengeluaran</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5"><p class="text-slate-500 dark:text-slate-400 font-medium text-xs uppercase tracking-wider mb-1">Saldo BCA</p><h3 class="text-2xl font-bold text-blue-600 dark:text-blue-400" id="fin-saldo-BCA">Rp 0</h3></div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5"><p class="text-slate-500 dark:text-slate-400 font-medium text-xs uppercase tracking-wider mb-1">Saldo BNI</p><h3 class="text-2xl font-bold text-orange-600 dark:text-orange-400" id="fin-saldo-BNI">Rp 0</h3></div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5"><p class="text-slate-500 dark:text-slate-400 font-medium text-xs uppercase tracking-wider mb-1">Saldo BRI</p><h3 class="text-2xl font-bold text-sky-600 dark:text-sky-400" id="fin-saldo-BRI">Rp 0</h3></div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5"><p class="text-slate-500 dark:text-slate-400 font-medium text-xs uppercase tracking-wider mb-1">Saldo Mandiri</p><h3 class="text-2xl font-bold text-indigo-600 dark:text-indigo-400" id="fin-saldo-MANDIRI">Rp 0</h3></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5"><p class="text-slate-500 dark:text-slate-400 font-medium text-xs uppercase tracking-wider mb-1">Total Saldo Kas</p><h3 class="text-2xl font-bold text-slate-900 dark:text-slate-100" id="fin-saldo-kas">Rp 0</h3></div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5"><p class="text-slate-500 dark:text-slate-400 font-medium text-xs uppercase tracking-wider mb-1">Total Uang Masuk</p><h3 class="text-2xl font-bold text-emerald-600 dark:text-emerald-400" id="fin-uang-masuk">Rp 0</h3></div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-5"><p class="text-slate-500 dark:text-slate-400 font-medium text-xs uppercase tracking-wider mb-1">Total Uang Keluar</p><h3 class="text-2xl font-bold text-rose-600 dark:text-rose-400" id="fin-uang-keluar">Rp 0</h3></div>
+                </div>
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 mb-6">
+                    <h5 class="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">Daftar Piutang (Belum Cair)</h5>
+                    <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                        <table class="w-full text-sm text-left whitespace-nowrap">
+                            <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal</th><th class="px-4 py-3 font-medium">No Invoice</th><th class="px-4 py-3 font-medium">Marketplace</th><th class="px-4 py-3 font-medium">Toko</th><th class="px-4 py-3 font-medium">Penerimaan Bersih</th><th class="px-4 py-3 font-medium">Aksi</th></tr></thead>
+                            <tbody id="tbody-finance-belum" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- BOTTOM: Nav Tabs -->
+                <div class="border-b border-slate-200 dark:border-slate-700 mb-6">
+                    <ul class="flex gap-6 -mb-px">
+                        <li><button onclick="switchTab('tab-fin-sudah','fin')" class="tab-btn-fin px-1 pb-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600" data-tab="tab-fin-sudah">Penarikan Dana (Sudah Cair)</button></li>
+                        <li><button onclick="switchTab('tab-fin-pengeluaran','fin')" class="tab-btn-fin px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-fin-pengeluaran">Pengeluaran Operasional</button></li>
+                        <li><button onclick="switchTab('tab-fin-mutasi','fin')" class="tab-btn-fin px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-fin-mutasi">Mutasi Arus Kas</button></li>
+                    </ul>
+                </div>
+
+                <!-- Tab 1: Sudah Cair -->
+                <div id="tab-fin-sudah" class="tab-content-fin">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <h5 class="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">Riwayat Penarikan Dana (Sudah Cair)</h5>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal Withdraw</th><th class="px-4 py-3 font-medium">No Invoice</th><th class="px-4 py-3 font-medium">Marketplace</th><th class="px-4 py-3 font-medium">Toko</th><th class="px-4 py-3 font-medium">Penerimaan Bersih</th></tr></thead>
+                                <tbody id="tbody-finance-sudah" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Pengeluaran -->
+                <div id="tab-fin-pengeluaran" class="tab-content-fin hidden">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <h5 class="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">Riwayat Pengeluaran Operasional</h5>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal</th><th class="px-4 py-3 font-medium">Kategori</th><th class="px-4 py-3 font-medium">Nominal</th><th class="px-4 py-3 font-medium">Keterangan</th><th class="px-4 py-3 font-medium">Aksi</th></tr></thead>
+                                <tbody id="tbody-finance-pengeluaran" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Mutasi Arus Kas -->
+                <div id="tab-fin-mutasi" class="tab-content-fin hidden">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <h5 class="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">Mutasi Arus Kas</h5>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal</th><th class="px-4 py-3 font-medium">Tipe</th><th class="px-4 py-3 font-medium">Rekening</th><th class="px-4 py-3 font-medium">Keterangan</th><th class="px-4 py-3 font-medium text-right">Masuk (Debit)</th><th class="px-4 py-3 font-medium text-right">Keluar (Kredit)</th><th class="px-4 py-3 font-medium text-right">Saldo</th></tr></thead>
+                                <tbody id="tbody-mutasi-kas" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                            </table>
+                        </div>
+                        <div id="pagination-mutasi-kas" class="mt-4 flex justify-between items-center text-sm text-slate-500"></div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- RETURNS VIEW -->
+            <div id="view-returns" class="page-view hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="col-span-1">
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                            <h5 class="text-lg font-semibold mb-6 text-slate-800 dark:text-slate-100">Proses Retur Baru</h5>
+                            <form id="formRetur" onsubmit="saveRetur(event)">
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-slate-500 mb-1">No Invoice Asli</label>
+                                    <div class="flex gap-2">
+                                        <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="ret_no_invoice" required placeholder="INV-...">
+                                        <button class="px-4 py-2 border border-slate-200 dark:border-slate-600 font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm" type="button" onclick="cariInvoiceRetur()">Cari</button>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-slate-500 mb-1">Pilih Produk (dari Invoice)</label>
+                                    <select class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm disabled:opacity-50" id="ret_produk" required disabled onchange="onReturProductChange()">
+                                        <option value="">-- Cari Invoice Dulu --</option>
+                                    </select>
+                                </div>
+                                <div id="ret_warning_dana" class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-500 p-3 rounded-lg mb-4 text-sm hidden">
+                                    <span class="font-bold block">Dana invoice asli sudah cair!</span>
+                                    Pilih invoice pending lain untuk memotong saldo.
+                                </div>
+                                <div class="mb-4 hidden" id="ret_target_group">
+                                    <label class="block text-sm font-semibold text-red-600 mb-1">Bebankan Potongan Ke Invoice (Pending)</label>
+                                    <select class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm disabled:opacity-50" id="ret_target_invoice" disabled>
+                                        <option value="">-- Pilih Invoice Pending --</option>
+                                    </select>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-500 mb-1">Qty Retur</label>
+                                        <input type="number" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg outline-none text-sm disabled:opacity-50" id="ret_qty" required min="1" disabled>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-500 mb-1">Kondisi</label>
+                                        <select class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg outline-none text-sm disabled:opacity-50" id="ret_kondisi" required disabled>
+                                            <option value="Bagus">Bagus (Restock)</option>
+                                            <option value="Rusak">Rusak (Rugi)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-6">
+                                    <label class="block text-sm font-medium text-slate-500 mb-1">Taksiran Kerugian (Opsional)</label>
+                                    <input type="number" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg outline-none text-sm disabled:opacity-50" id="ret_kerugian" value="0" min="0" disabled>
+                                    <p class="text-xs text-slate-400 mt-1">Diisi jika barang rusak dan ada rugi manual.</p>
+                                </div>
+                                <button type="submit" class="w-full py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-xl hover:bg-slate-800 dark:hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed" id="btnSaveRetur" disabled>Proses Retur</button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div class="lg:col-span-2">
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                            <h5 class="text-lg font-semibold mb-6 text-slate-800 dark:text-slate-100">Riwayat Retur</h5>
+                            <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                                <table class="w-full text-sm text-left whitespace-nowrap">
+                                    <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30">
+                                        <tr>
+                                            <th class="px-4 py-3 font-medium">Tanggal</th>
+                                            <th class="px-4 py-3 font-medium">ID Retur</th>
+                                            <th class="px-4 py-3 font-medium">Invoice Asli</th>
+                                            <th class="px-4 py-3 font-medium">Produk</th>
+                                            <th class="px-4 py-3 font-medium">Qty</th>
+                                            <th class="px-4 py-3 font-medium">Kondisi</th>
+                                            <th class="px-4 py-3 font-medium">Potong Dari (Target)</th>
+                                            <th class="px-4 py-3 font-medium">Kerugian Manual</th>
+                                            <th class="px-4 py-3 font-medium">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-retur" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div id="pagination-retur" class="mt-4 flex justify-between items-center text-sm text-slate-500">
+                                <!-- Pagination injected via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTORY VIEW -->
+            <div id="view-history" class="page-view hidden">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Total Invoice</p>
+                        <h3 class="text-2xl font-bold text-slate-800 dark:text-slate-100" id="hist_total_invoice">0</h3>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Total Omset Kotor</p>
+                        <h3 class="text-2xl font-bold text-emerald-600 dark:text-emerald-400" id="hist_total_omset">Rp 0</h3>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Total Penerimaan Bersih</p>
+                        <h3 class="text-2xl font-bold text-blue-600 dark:text-blue-400" id="hist_total_bersih">Rp 0</h3>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Total Potongan Admin</p>
+                        <h3 class="text-2xl font-bold text-red-600 dark:text-red-400" id="hist_total_potongan">Rp 0</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        <div class="md:col-span-3">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Mulai Tanggal</label>
+                            <input type="date" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="hist_filter_start">
+                        </div>
+                        <div class="md:col-span-3">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Sampai Tanggal</label>
+                            <input type="date" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="hist_filter_end">
+                        </div>
+                        <div class="md:col-span-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Pencarian</label>
+                            <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="hist_filter_search" placeholder="Cari No. Invoice, Marketplace, atau Toko...">
+                        </div>
+                        <div class="md:col-span-2 flex gap-2">
+                            <button onclick="applyHistoryFilter()" class="flex-1 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors text-sm">Terapkan</button>
+                            <button onclick="resetHistoryFilter()" class="flex-1 py-2 border border-slate-200 dark:border-slate-600 font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm">Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                    <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                        <table class="w-full text-sm text-left whitespace-nowrap">
+                            <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" onclick="sortHistory('Tanggal')">
+                                        <div class="flex items-center gap-1">Tanggal <i id="sort_Tanggal" data-lucide="arrow-down" class="w-4 h-4 text-slate-900 dark:text-slate-100"></i></div>
+                                    </th>
+                                    <th class="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" onclick="sortHistory('No_Invoice')">
+                                        <div class="flex items-center gap-1">No Invoice <i id="sort_No_Invoice" data-lucide="minus" class="w-4 h-4 text-transparent"></i></div>
+                                    </th>
+                                    <th class="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" onclick="sortHistory('Marketplace')">
+                                        <div class="flex items-center gap-1">Marketplace <i id="sort_Marketplace" data-lucide="minus" class="w-4 h-4 text-transparent"></i></div>
+                                    </th>
+                                    <th class="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" onclick="sortHistory('Nama_Toko')">
+                                        <div class="flex items-center gap-1">Toko <i id="sort_Nama_Toko" data-lucide="minus" class="w-4 h-4 text-transparent"></i></div>
+                                    </th>
+                                    <th class="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" onclick="sortHistory('Total_Omset')">
+                                        <div class="flex items-center gap-1">Omset Kotor <i id="sort_Total_Omset" data-lucide="minus" class="w-4 h-4 text-transparent"></i></div>
+                                    </th>
+                                    <th class="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" onclick="sortHistory('Laba_Bersih')">
+                                        <div class="flex items-center gap-1">Penerimaan Bersih <i id="sort_Laba_Bersih" data-lucide="minus" class="w-4 h-4 text-transparent"></i></div>
+                                    </th>
+                                    <th class="px-4 py-3 font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors" onclick="sortHistory('Status_Dana')">
+                                        <div class="flex items-center gap-1">Status Dana <i id="sort_Status_Dana" data-lucide="minus" class="w-4 h-4 text-transparent"></i></div>
+                                    </th>
+                                    <th class="px-4 py-3 font-medium">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-history" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="flex justify-between items-center mt-4">
+                        <span class="text-sm text-slate-500" id="hist_pagination_info">Menampilkan 0 dari 0 baris</span>
+                        <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700">
+                            <button id="hist_btn_prev" onclick="changePageHistory(-1)" class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700 transition-colors rounded-l-lg">Previous</button>
+                            <button id="hist_page_number" disabled class="px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800/50">1</button>
+                            <button id="hist_btn_next" onclick="changePageHistory(1)" class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-l border-slate-200 dark:border-slate-700 transition-colors rounded-r-lg">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modals Overlay System -->
+
+    <!-- Modal Master Produk -->
+    <div id="modalMasterProduk" class="fixed inset-0 z-50 hidden" tabindex="-1">
+        <div class="modal-overlay absolute inset-0 bg-slate-900/50 backdrop-blur-sm opacity-0" data-bs-dismiss="modal"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="modal-content relative w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 scale-95 opacity-0 overflow-hidden">
+                <form id="formMasterProduk" onsubmit="saveProduk(event)">
+                    <div class="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-700">
+                        <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Form Produk</h5>
+                        <button type="button" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" data-bs-dismiss="modal">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">ID Produk (Manual)</label>
+                            <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm uppercase" id="prd_id" required>
+                            <p class="text-xs text-slate-400 mt-1">Gunakan huruf kapital tanpa spasi (Cth: PRD-001)</p>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Nama Produk</label>
+                            <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="prd_nama" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Harga Jual Default (Rp)</label>
+                            <input type="number" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="prd_harga" required min="0">
+                        </div>
+                    </div>
+                    <div class="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50">
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors" id="btnSaveProduk">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Inbound Stok (Multi-Item Cart) -->
+    <div id="modalInbound" class="fixed inset-0 z-50 hidden" tabindex="-1">
+        <div class="modal-overlay absolute inset-0 bg-slate-900/50 backdrop-blur-sm opacity-0" data-bs-dismiss="modal"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="modal-content relative w-full max-w-4xl bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 scale-95 opacity-0 overflow-hidden">
+                <div class="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-700">
+                    <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Tambah Stok Masuk Baru (Multi-Item)</h5>
+                    <button type="button" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" data-bs-dismiss="modal">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="p-6 max-h-[75vh] overflow-y-auto">
+                    <!-- Header Section -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Tanggal Masuk</label>
+                            <input type="date" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="inb_tanggal" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Nama Supplier</label>
+                            <div class="flex gap-2">
+                                <select class="select-supplier flex-1 px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="inb_supplier" required>
+                                </select>
+                                <button type="button" onclick="openModalSupplier()" class="px-3 border border-slate-200 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-500 mb-1">No. Invoice Pembelian (PO)</label>
+                            <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="inb_inv_supplier" required placeholder="Cth: PO-2026-001">
+                        </div>
+                    </div>
+
+                    <hr class="border-slate-100 dark:border-slate-700 mb-6">
+
+                    <!-- Item Input Row -->
+                    <div class="bg-slate-50 dark:bg-slate-700/30 rounded-xl p-4 mb-4">
+                        <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Tambah Item ke Keranjang</p>
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                            <div class="md:col-span-3">
+                                <label class="block text-xs font-medium text-slate-500 mb-1">Produk</label>
+                                <select class="select-produk w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="inb_cart_produk">
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-medium text-slate-500 mb-1">Qty Masuk</label>
+                                <input type="number" class="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 outline-none text-sm" id="inb_cart_qty" min="1" value="1">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-medium text-slate-500 mb-1">Harga Beli Kotor</label>
+                                <input type="number" class="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 outline-none text-sm" id="inb_cart_harga_kotor" min="0" value="0" oninput="calculateInboundCartNetPrice()">
+                            </div>
+                            <div class="md:col-span-1">
+                                <label class="block text-xs font-medium text-slate-500 mb-1">Diskon %</label>
+                                <input type="number" class="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 outline-none text-sm" id="inb_cart_diskon" value="0" min="0" max="100" oninput="calculateInboundCartNetPrice()">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-medium text-slate-500 mb-1">HPP Bersih</label>
+                                <input type="number" class="w-full px-3 py-2 bg-slate-100 dark:bg-slate-600 border border-slate-200 dark:border-slate-600 rounded-lg outline-none text-sm" id="inb_cart_harga_bersih" readonly>
+                            </div>
+                            <div class="md:col-span-2">
+                                <button type="button" onclick="addInboundCartItem()" class="w-full px-4 py-2 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-medium rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors flex items-center justify-center gap-2 text-sm">
+                                    <i data-lucide="plus" class="w-4 h-4"></i> Tambah
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cart Table -->
+                    <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700 mb-4">
+                        <table class="w-full text-sm text-left whitespace-nowrap">
+                            <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium">#</th>
+                                    <th class="px-4 py-3 font-medium">Produk</th>
+                                    <th class="px-4 py-3 font-medium">Qty</th>
+                                    <th class="px-4 py-3 font-medium">Harga Kotor</th>
+                                    <th class="px-4 py-3 font-medium">Diskon</th>
+                                    <th class="px-4 py-3 font-medium">HPP Bersih</th>
+                                    <th class="px-4 py-3 font-medium">Subtotal</th>
+                                    <th class="px-4 py-3 font-medium w-12"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="inbound-cart-items" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                                <tr><td colspan="8" class="text-center text-slate-400 py-6">Belum ada item ditambahkan</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Cart Summary -->
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-slate-500">Total Item: <strong id="inb_cart_total_items" class="text-slate-800 dark:text-slate-100">0</strong></span>
+                        <span class="text-slate-500">Total Nilai: <strong id="inb_cart_total_value" class="text-slate-800 dark:text-slate-100">Rp 0</strong></span>
+                    </div>
+                </div>
+                <div class="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50">
+                    <button type="button" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" onclick="saveAllInbound()" class="px-4 py-2 text-sm font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors flex items-center gap-2" id="btnSaveInbound">
+                        <i data-lucide="save" class="w-4 h-4"></i> Simpan Semua Stok
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah Supplier -->
+    <div id="modalSupplier" class="fixed inset-0 z-[60] hidden" tabindex="-1">
+        <div class="modal-overlay absolute inset-0 bg-slate-900/50 backdrop-blur-sm opacity-0" data-bs-dismiss="modal"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="modal-content relative w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 scale-95 opacity-0 overflow-hidden">
+                <form id="formSupplier" onsubmit="saveSupplier(event)">
+                    <div class="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-700">
+                        <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Tambah Supplier Baru</h5>
+                        <button type="button" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" data-bs-dismiss="modal">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <input type="hidden" id="sup_id">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Nama Supplier</label>
+                            <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="sup_nama" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Alamat</label>
+                            <textarea class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="sup_alamat" rows="2"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">No Telepon</label>
+                            <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="sup_notlp">
+                        </div>
+                    </div>
+                    <div class="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50">
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors" id="btnSaveSupplier">Simpan Supplier</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Master Toko -->
+    <div id="modalMasterToko" class="fixed inset-0 z-50 hidden" tabindex="-1">
+        <div class="modal-overlay absolute inset-0 bg-slate-900/50 backdrop-blur-sm opacity-0" data-bs-dismiss="modal"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="modal-content relative w-full max-w-2xl bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 scale-95 opacity-0 overflow-hidden">
+                <form id="formMasterToko" onsubmit="saveToko(event)">
+                    <div class="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-700">
+                        <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Form Toko</h5>
+                        <button type="button" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" data-bs-dismiss="modal">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="p-6 max-h-[70vh] overflow-y-auto">
+                        <input type="hidden" id="toko_id">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-500 mb-1">Marketplace</label>
+                                <select class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="toko_marketplace" required>
+                                    <option value="Shopee">Shopee</option>
+                                    <option value="TikTok">TikTok</option>
+                                    <option value="Lazada">Lazada</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-500 mb-1">Nama Toko</label>
+                                <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="toko_nama" required>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-500 mb-1">Fee E-Commerce (Desimal, misal 0.05 untuk 5%)</label>
+                                <input type="number" step="0.001" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="toko_fee_ecom" required min="0" max="1">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-500 mb-1">Fee Gratis Ongkir (Desimal)</label>
+                                <input type="number" step="0.001" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="toko_fee_ongkir" required min="0" max="1">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-500 mb-1">Max Gratis Ongkir (Rp)</label>
+                                <input type="number" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="toko_max_ongkir" required min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-500 mb-1">Fee Promo Extra (Desimal)</label>
+                                <input type="number" step="0.001" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="toko_fee_promo" required min="0" max="1">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-500 mb-1">Max Promo Extra (Rp)</label>
+                                <input type="number" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="toko_max_promo" required min="0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50">
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors" id="btnSaveToko">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pengeluaran -->
+    <div id="modalPengeluaran" class="fixed inset-0 z-50 hidden" tabindex="-1">
+        <div class="modal-overlay absolute inset-0 bg-slate-900/50 backdrop-blur-sm opacity-0" data-bs-dismiss="modal"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="modal-content relative w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 scale-95 opacity-0 overflow-hidden">
+                <form id="formPengeluaran" onsubmit="savePengeluaran(event)">
+                    <div class="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-700">
+                        <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Catat Pengeluaran</h5>
+                        <button type="button" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" data-bs-dismiss="modal">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Tanggal</label>
+                            <input type="date" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="peng_tanggal" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Kategori</label>
+                            <select class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="peng_kategori" required>
+                                <option value="Packing">Packing</option>
+                                <option value="Operasional Gudang">Operasional Gudang</option>
+                                <option value="Ongkir Retur">Ongkir Retur</option>
+                                <option value="Lain-lain">Lain-lain</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Nominal (Rp)</label>
+                            <input type="number" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="peng_nominal" required min="1">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Keterangan</label>
+                            <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="peng_keterangan" required placeholder="Contoh: Beli lakban">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Sumber Dana (Rekening)</label>
+                            <select class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="peng_rekening" required>
+                                <option value="BCA">BCA</option>
+                                <option value="BNI">BNI</option>
+                                <option value="BRI">BRI</option>
+                                <option value="MANDIRI">MANDIRI</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50">
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-slate-900 dark:bg-slate-100 dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-white transition-colors" id="btnSavePengeluaran">Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Tambah Modal (Capital Injection) -->
+    <div id="modalTambahModal" class="fixed inset-0 z-50 hidden" tabindex="-1">
+        <div class="modal-overlay absolute inset-0 bg-slate-900/50 backdrop-blur-sm opacity-0" data-bs-dismiss="modal"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="modal-content relative w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 scale-95 opacity-0 overflow-hidden">
+                <form id="formTambahModal" onsubmit="saveTambahModal(event)">
+                    <div class="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-700">
+                        <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Tambah Modal / Injeksi Dana</h5>
+                        <button type="button" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" data-bs-dismiss="modal">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Tanggal</label>
+                            <input type="date" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="modal_tanggal" required>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Nominal (Rp)</label>
+                            <input type="number" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="modal_nominal" required min="1" placeholder="0">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Keterangan</label>
+                            <input type="text" class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="modal_keterangan" placeholder="Contoh: Setoran modal awal" value="Penambahan Modal">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-slate-500 mb-1">Masuk ke Rekening</label>
+                            <select class="w-full px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm" id="modal_rekening" required>
+                                <option value="BCA">BCA</option>
+                                <option value="BNI">BNI</option>
+                                <option value="BRI">BRI</option>
+                                <option value="MANDIRI">MANDIRI</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50">
+                        <button type="button" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2" id="btnSaveTambahModal">
+                            <i data-lucide="landmark" class="w-4 h-4"></i> Simpan Modal
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Invoice Detail -->
+    <div id="modalInvoiceDetail" class="fixed inset-0 z-50 hidden" tabindex="-1">
+        <div class="modal-overlay absolute inset-0 bg-slate-900/50 backdrop-blur-sm opacity-0" data-bs-dismiss="modal"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="modal-content relative w-full max-w-3xl bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 scale-95 opacity-0 overflow-hidden">
+                <div class="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-700">
+                    <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Detail Invoice: <span id="det_no_invoice"></span></h5>
+                    <button type="button" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors" data-bs-dismiss="modal">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="p-6 max-h-[70vh] overflow-y-auto">
+                    <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                        <table class="w-full text-sm text-left whitespace-nowrap">
+                            <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30">
+                                <tr>
+                                    <th class="px-4 py-3 font-medium">Produk</th>
+                                    <th class="px-4 py-3 font-medium">Qty</th>
+                                    <th class="px-4 py-3 font-medium">Harga Jual Aktual</th>
+                                    <th class="px-4 py-3 font-medium">Total HPP</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-invoice-detail" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="p-6 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50">
+                    <button type="button" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors" data-bs-dismiss="modal">Tutup</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <?!= include('JavaScript'); ?>
+
+</body>
+</html>

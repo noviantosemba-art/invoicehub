@@ -1,0 +1,2681 @@
+<script>
+    // --- BOOTSTRAP SHIM FOR TAILWIND MODALS ---
+    const bootstrap = {
+        Modal: class {
+            constructor(element) {
+                this.element = element;
+                this.overlay = element.querySelector('.modal-overlay');
+                this.content = element.querySelector('.modal-content');
+            }
+            show() {
+                this.element.classList.remove('hidden');
+                // Small delay for transition
+                setTimeout(() => {
+                    if(this.overlay) this.overlay.classList.remove('opacity-0');
+                    if(this.content) {
+                        this.content.classList.remove('opacity-0', 'scale-95');
+                        this.content.classList.add('opacity-100', 'scale-100');
+                    }
+                }, 10);
+            }
+            hide() {
+                if(this.overlay) this.overlay.classList.add('opacity-0');
+                if(this.content) {
+                    this.content.classList.remove('opacity-100', 'scale-100');
+                    this.content.classList.add('opacity-0', 'scale-95');
+                }
+                setTimeout(() => {
+                    this.element.classList.add('hidden');
+                }, 200); // match transition duration
+            }
+            static getInstance(element) {
+                return new bootstrap.Modal(element);
+            }
+        }
+    };
+
+    // Global listeners for data-bs-dismiss
+    document.addEventListener('click', (e) => {
+        if(e.target.closest('[data-bs-dismiss="modal"]')) {
+            const modalEl = e.target.closest('.fixed.inset-0');
+            if(modalEl) {
+                const modal = new bootstrap.Modal(modalEl);
+                modal.hide();
+            }
+        }
+    });
+
+    // Global State
+    let state = {
+        produk: [],
+        supplier: [],
+        toko: [],
+        stok: [],
+        inventorySummary: [],
+        invoices: [],
+        retur: [],
+        pengeluaran: [],
+        bukuKas: [],
+        users: []
+    };
+
+    // Pagination States
+    let historyState = {
+        filtered: [],
+        currentPage: 1,
+        itemsPerPage: 25,
+        sortCol: 'Tanggal',
+        sortAsc: false
+    };
+
+    let inventorySummaryState = {
+        currentPage: 1,
+        itemsPerPage: 10
+    };
+
+    let inboundStokState = {
+        currentPage: 1,
+        itemsPerPage: 10
+    };
+
+    let returState = {
+        currentPage: 1,
+        itemsPerPage: 10
+    };
+
+    // Initialize App
+    document.addEventListener("DOMContentLoaded", () => {
+        lucide.createIcons();
+        checkSession();
+    });
+
+    function checkSession() {
+        const session = sessionStorage.getItem('krank_user');
+        if (session) {
+            // User is logged in
+            document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('sidebar').style.visibility = 'visible';
+            document.getElementById('main-content').style.visibility = 'visible';
+            setupThemeToggling();
+            setupSidebarToggling();
+            setupNavigation();
+            loadInitialData();
+        } else {
+            // Show login, hide main UI
+            document.getElementById('loginOverlay').style.display = 'flex';
+            document.getElementById('sidebar').style.visibility = 'hidden';
+            document.getElementById('main-content').style.visibility = 'hidden';
+            lucide.createIcons();
+        }
+    }
+
+    function handleLogin(e) {
+        e.preventDefault();
+        const username = document.getElementById('login_username').value.trim();
+        const password = document.getElementById('login_password').value.trim();
+        const errorDiv = document.getElementById('login_error');
+        const btn = document.getElementById('btnLogin');
+        
+        errorDiv.classList.add('hidden');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Memverifikasi...';
+        lucide.createIcons();
+        
+        google.script.run.withSuccessHandler(result => {
+            if (result && result.success) {
+                sessionStorage.setItem('krank_user', JSON.stringify({ username: result.username, role: result.role }));
+                checkSession();
+            } else {
+                errorDiv.textContent = result.message || 'Login gagal.';
+                errorDiv.classList.remove('hidden');
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> Masuk';
+                lucide.createIcons();
+            }
+        }).withFailureHandler(err => {
+            errorDiv.textContent = 'Error: ' + err.message;
+            errorDiv.classList.remove('hidden');
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> Masuk';
+            lucide.createIcons();
+        }).verifyLogin(username, password);
+    }
+
+    function handleLogout() {
+        if (confirm('Yakin ingin logout?')) {
+            sessionStorage.removeItem('krank_user');
+            location.reload();
+        }
+    }
+
+    function loadInitialData() {
+        showLoading(true);
+        google.script.run.withSuccessHandler(data => {
+            state = data;
+            state.bukuKas = data.bukuKas || [];
+            state.users = data.users || [];
+            renderMasterProduk();
+            renderMasterToko();
+            renderMasterUser();
+            renderInventorySummary();
+            renderInboundStok();
+            renderFinance();
+            renderPengeluaran();
+            renderRetur();
+            renderMutasiKas();
+            renderSaldoKas();
+            renderStokKrisis();
+            renderReturSummaryCard();
+            applyHistoryFilter();
+            updateDashboardMetrics();
+            populateProductSelects();
+            populateSupplierSelects();
+            showLoading(false);
+        }).getInitialData();
+    }
+
+    function showLoading(isLoading) {
+        const spinner = document.getElementById('globalSpinner');
+        if(isLoading) {
+            spinner.classList.remove('hidden');
+            document.body.style.pointerEvents = 'none';
+        } else {
+            spinner.classList.add('hidden');
+            document.body.style.pointerEvents = 'auto';
+        }
+    }
+
+    // --- LAYOUT & THEME LOGIC ---
+    function setupThemeToggling() {
+        const themeToggleBtn = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const htmlElement = document.documentElement;
+
+        const savedTheme = localStorage.getItem('krankuindonesia_theme') || 'light';
+        setTheme(savedTheme, htmlElement, themeIcon);
+
+        themeToggleBtn.addEventListener('click', () => {
+            const currentTheme = htmlElement.classList.contains('dark') ? 'dark' : 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            setTheme(newTheme, htmlElement, themeIcon);
+        });
+    }
+
+    function setTheme(theme, htmlElement, themeIcon) {
+        if (theme === 'dark') {
+            htmlElement.classList.add('dark');
+            htmlElement.classList.remove('light');
+        } else {
+            htmlElement.classList.add('light');
+            htmlElement.classList.remove('dark');
+        }
+        localStorage.setItem('krankuindonesia_theme', theme);
+        // Replace icon instead of just text content
+        const iconName = theme === 'light' ? 'moon' : 'sun';
+        const newIcon = document.createElement('i');
+        newIcon.setAttribute('data-lucide', iconName);
+        newIcon.setAttribute('id', 'themeIcon');
+        newIcon.className = 'w-5 h-5';
+        themeIcon.parentNode.replaceChild(newIcon, themeIcon);
+        lucide.createIcons();
+    }
+
+    function setupSidebarToggling() {
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+        });
+
+        overlay.addEventListener('click', () => {
+            sidebar.classList.add('-translate-x-full');
+            overlay.classList.add('hidden');
+        });
+    }
+
+    function setupNavigation() {
+        const navLinks = document.querySelectorAll('.nav-link');
+        const pageViews = document.querySelectorAll('.page-view');
+        const pageTitle = document.getElementById('pageTitle');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+
+        navLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetPage = link.getAttribute('data-page');
+                
+                navLinks.forEach(l => {
+                    l.classList.remove('bg-slate-100', 'dark:bg-slate-700', 'text-slate-900', 'dark:text-white');
+                    l.classList.add('text-slate-600', 'dark:text-slate-300');
+                });
+                link.classList.remove('text-slate-600', 'dark:text-slate-300');
+                link.classList.add('bg-slate-100', 'dark:bg-slate-700', 'text-slate-900', 'dark:text-white');
+                
+                pageViews.forEach(view => {
+                    if (view.id === 'view-' + targetPage) {
+                        view.classList.remove('hidden');
+                    } else {
+                        view.classList.add('hidden');
+                    }
+                });
+                
+                // Dynamic Title Update
+                pageTitle.textContent = link.innerText.trim();
+                
+                if(window.innerWidth <= 768) {
+                    sidebar.classList.add('-translate-x-full');
+                    overlay.classList.add('hidden');
+                }
+            });
+        });
+    }
+
+    // --- RENDER MASTER PRODUK ---
+    function renderMasterProduk() {
+        const tbody = document.getElementById('tbody-master-produk');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        state.produk.forEach(p => {
+            tbody.innerHTML += `
+                <tr>
+                    <td class="px-4 py-3">${p.ID_Produk}</td>
+                    <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${p.Nama_Produk}</td>
+                    <td class="px-4 py-3">Rp ${p.Harga_Jual_Default.toLocaleString('id-ID')}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex gap-2">
+                            <button class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" onclick="editProduk('${p.ID_Produk}')">
+                                <i data-lucide="edit" class="w-4 h-4"></i>
+                            </button>
+                            <button class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onclick="deleteProduk('${p.ID_Produk}')">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        lucide.createIcons();
+    }
+
+    function openModalProduk() {
+        document.getElementById('formMasterProduk').reset();
+        const inputId = document.getElementById('prd_id');
+        inputId.value = '';
+        inputId.readOnly = false;
+        const modal = new bootstrap.Modal(document.getElementById('modalMasterProduk'));
+        modal.show();
+    }
+
+    function saveProduk(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btnSaveProduk');
+        btn.disabled = true;
+        btn.innerHTML = 'Menyimpan...';
+
+        const produk = {
+            ID_Produk: document.getElementById('prd_id').value,
+            Nama_Produk: document.getElementById('prd_nama').value,
+            Harga_Jual_Default: document.getElementById('prd_harga').value
+        };
+
+        google.script.run.withSuccessHandler(() => {
+            loadInitialData();
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalMasterProduk'));
+            modal.hide();
+            btn.disabled = false;
+            btn.innerHTML = 'Simpan';
+        }).saveMasterProduk(produk);
+    }
+
+    function editProduk(id) {
+        const p = state.produk.find(x => x.ID_Produk === id);
+        if (p) {
+            const inputId = document.getElementById('prd_id');
+            inputId.value = p.ID_Produk;
+            inputId.readOnly = true;
+            document.getElementById('prd_nama').value = p.Nama_Produk;
+            document.getElementById('prd_harga').value = p.Harga_Jual_Default;
+            const modal = new bootstrap.Modal(document.getElementById('modalMasterProduk'));
+            modal.show();
+        }
+    }
+
+    function deleteProduk(id) {
+        if (confirm('Yakin ingin menghapus produk ini?')) {
+            showLoading(true);
+            google.script.run.withSuccessHandler(() => {
+                loadInitialData();
+            }).deleteMasterProduk(id);
+        }
+    }
+
+    // --- RENDER MASTER TOKO ---
+    function renderMasterToko() {
+        const tbody = document.getElementById('tbody-master-toko');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if(state.toko) {
+            state.toko.forEach(t => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="px-4 py-3">${t.ID_Toko}</td>
+                        <td class="px-4 py-3"><span class="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium">${t.Marketplace}</span></td>
+                        <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${t.Nama_Toko}</td>
+                        <td class="px-4 py-3">${(t.Fee_Ecommerce_Pct * 100).toFixed(1)}%</td>
+                        <td class="px-4 py-3">${(t.Fee_GratisOngkir_Pct * 100).toFixed(1)}%</td>
+                        <td class="px-4 py-3">Rp ${t.Max_GratisOngkir.toLocaleString('id-ID')}</td>
+                        <td class="px-4 py-3">${(t.Fee_Promo_Pct * 100).toFixed(1)}%</td>
+                        <td class="px-4 py-3">Rp ${t.Max_Promo.toLocaleString('id-ID')}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex gap-2">
+                                <button class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" onclick="editToko('${t.ID_Toko}')">
+                                    <i data-lucide="edit" class="w-4 h-4"></i>
+                                </button>
+                                <button class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onclick="deleteToko('${t.ID_Toko}')">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+        lucide.createIcons();
+    }
+
+    // --- USER MANAGEMENT ---
+    function renderMasterUser() {
+        const tbody = document.getElementById('tbody-master-user');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (state.users && state.users.length > 0) {
+            state.users.forEach(u => {
+                const roleBadge = u.Role === 'Admin' 
+                    ? '<span class="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded text-xs font-medium">Admin</span>'
+                    : u.Role === 'Staff'
+                    ? '<span class="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded text-xs font-medium">Staff</span>'
+                    : '<span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded text-xs font-medium">Viewer</span>';
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${u.Username}</td>
+                        <td class="px-4 py-3">${roleBadge}</td>
+                        <td class="px-4 py-3">
+                            <button class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onclick="deleteUser('${u.Username}')">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="3" class="px-4 py-6 text-center text-slate-400">Belum ada pengguna</td></tr>';
+        }
+        lucide.createIcons();
+    }
+
+    function saveNewUser(e) {
+        e.preventDefault();
+        const user = {
+            Username: document.getElementById('user_username').value.trim(),
+            Password: document.getElementById('user_password').value,
+            Role: document.getElementById('user_role').value
+        };
+        const btn = document.getElementById('btnSaveUser');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Menyimpan...';
+        lucide.createIcons();
+
+        google.script.run.withSuccessHandler(() => {
+            document.getElementById('formAddUser').reset();
+            loadInitialData();
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="user-plus" class="w-4 h-4"></i> Tambah User';
+            lucide.createIcons();
+        }).withFailureHandler(err => {
+            alert('Gagal: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="user-plus" class="w-4 h-4"></i> Tambah User';
+            lucide.createIcons();
+        }).saveMasterUser(user);
+    }
+
+    function deleteUser(username) {
+        if (confirm('Hapus akun pengguna "' + username + '"?')) {
+            showLoading(true);
+            google.script.run.withSuccessHandler(res => {
+                loadInitialData();
+            }).withFailureHandler(err => {
+                alert('Gagal: ' + err.message);
+                showLoading(false);
+            }).deleteMasterUser(username);
+        }
+    }
+
+    function openModalToko() {
+        document.getElementById('formMasterToko').reset();
+        document.getElementById('toko_id').value = '';
+        const modal = new bootstrap.Modal(document.getElementById('modalMasterToko'));
+        modal.show();
+    }
+
+    function saveToko(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btnSaveToko');
+        btn.disabled = true;
+        btn.innerHTML = 'Menyimpan...';
+
+        const toko = {
+            ID_Toko: document.getElementById('toko_id').value,
+            Marketplace: document.getElementById('toko_marketplace').value,
+            Nama_Toko: document.getElementById('toko_nama').value,
+            Fee_Ecommerce_Pct: parseFloat(document.getElementById('toko_fee_ecom').value) || 0,
+            Fee_GratisOngkir_Pct: parseFloat(document.getElementById('toko_fee_ongkir').value) || 0,
+            Max_GratisOngkir: parseFloat(document.getElementById('toko_max_ongkir').value) || 0,
+            Fee_Promo_Pct: parseFloat(document.getElementById('toko_fee_promo').value) || 0,
+            Max_Promo: parseFloat(document.getElementById('toko_max_promo').value) || 0
+        };
+
+        google.script.run.withSuccessHandler(() => {
+            loadInitialData();
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalMasterToko'));
+            modal.hide();
+            btn.disabled = false;
+            btn.innerHTML = 'Simpan';
+        }).saveMasterToko(toko);
+    }
+
+    function editToko(id) {
+        const t = state.toko.find(x => x.ID_Toko === id);
+        if (t) {
+            document.getElementById('toko_id').value = t.ID_Toko;
+            document.getElementById('toko_marketplace').value = t.Marketplace;
+            document.getElementById('toko_nama').value = t.Nama_Toko;
+            document.getElementById('toko_fee_ecom').value = t.Fee_Ecommerce_Pct;
+            document.getElementById('toko_fee_ongkir').value = t.Fee_GratisOngkir_Pct;
+            document.getElementById('toko_max_ongkir').value = t.Max_GratisOngkir;
+            document.getElementById('toko_fee_promo').value = t.Fee_Promo_Pct;
+            document.getElementById('toko_max_promo').value = t.Max_Promo;
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalMasterToko'));
+            modal.show();
+        }
+    }
+
+    function deleteToko(id) {
+        if (confirm('Yakin ingin menghapus data toko ini?')) {
+            showLoading(true);
+            google.script.run.withSuccessHandler(() => {
+                loadInitialData();
+            }).deleteMasterToko(id);
+        }
+    }
+
+    // --- RENDER INVENTORY ---
+    function populateProductSelects() {
+        const selects = document.querySelectorAll('.select-produk');
+        selects.forEach(sel => {
+            sel.innerHTML = '<option value="">-- Pilih Produk --</option>';
+            state.produk.forEach(p => {
+                sel.innerHTML += `<option value="${p.ID_Produk}">${p.Nama_Produk} (${p.ID_Produk})</option>`;
+            });
+        });
+    }
+
+    function populateSupplierSelects() {
+        const selects = document.querySelectorAll('.select-supplier');
+        selects.forEach(sel => {
+            sel.innerHTML = '<option value="">-- Pilih Supplier --</option>';
+            if(state.supplier) {
+                state.supplier.forEach(s => {
+                    sel.innerHTML += `<option value="${s.Nama}">${s.Nama}</option>`;
+                });
+            }
+        });
+    }
+
+    function changePageInventorySummary(delta) {
+        const totalPages = Math.ceil(state.inventorySummary.length / inventorySummaryState.itemsPerPage) || 1;
+        inventorySummaryState.currentPage += delta;
+        if (inventorySummaryState.currentPage < 1) inventorySummaryState.currentPage = 1;
+        if (inventorySummaryState.currentPage > totalPages) inventorySummaryState.currentPage = totalPages;
+        renderInventorySummary();
+    }
+
+    function renderInventorySummary() {
+        const tbody = document.getElementById('tbody-inventory-summary');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        const startIdx = (inventorySummaryState.currentPage - 1) * inventorySummaryState.itemsPerPage;
+        const endIdx = startIdx + inventorySummaryState.itemsPerPage;
+        const slicedData = state.inventorySummary.slice(startIdx, endIdx);
+        
+        slicedData.forEach(s => {
+            const p = state.produk.find(x => x.ID_Produk === s.ID_Produk);
+            tbody.innerHTML += `
+                <tr>
+                    <td class="px-4 py-3">${s.ID_Produk}</td>
+                    <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${s.Nama_Produk}</td>
+                    <td class="px-4 py-3">Rp ${p ? p.Harga_Jual_Default.toLocaleString('id-ID') : 0}</td>
+                    <td class="px-4 py-3"><span class="px-2.5 py-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg text-xs font-bold">${s.Total_Stok}</span></td>
+                    <td class="px-4 py-3">Rp ${s.Nilai_Aset.toLocaleString('id-ID')}</td>
+                </tr>
+            `;
+        });
+        
+        // Update Pagination Controls
+        const totalRows = state.inventorySummary.length;
+        const totalPages = Math.ceil(totalRows / inventorySummaryState.itemsPerPage) || 1;
+        const displayStart = totalRows === 0 ? 0 : startIdx + 1;
+        const displayEnd = Math.min(endIdx, totalRows);
+        
+        const paginationContainer = document.getElementById('pagination-inventory-summary');
+        if(paginationContainer) {
+            paginationContainer.innerHTML = `
+                <span>Menampilkan ${displayStart}-${displayEnd} dari ${totalRows} baris</span>
+                <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700">
+                    <button onclick="changePageInventorySummary(-1)" ${inventorySummaryState.currentPage === 1 ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700 transition-colors rounded-l-lg disabled:opacity-50">Previous</button>
+                    <button disabled class="px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800/50">${inventorySummaryState.currentPage}</button>
+                    <button onclick="changePageInventorySummary(1)" ${inventorySummaryState.currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-l border-slate-200 dark:border-slate-700 transition-colors rounded-r-lg disabled:opacity-50">Next</button>
+                </div>
+            `;
+        }
+        lucide.createIcons();
+    }
+
+    function changePageInboundStok(delta) {
+        const totalPages = Math.ceil(state.stok.length / inboundStokState.itemsPerPage) || 1;
+        inboundStokState.currentPage += delta;
+        if (inboundStokState.currentPage < 1) inboundStokState.currentPage = 1;
+        if (inboundStokState.currentPage > totalPages) inboundStokState.currentPage = totalPages;
+        renderInboundStok();
+    }
+
+    function renderInboundStok() {
+        const tbody = document.getElementById('tbody-inbound');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        const startIdx = (inboundStokState.currentPage - 1) * inboundStokState.itemsPerPage;
+        const endIdx = startIdx + inboundStokState.itemsPerPage;
+        const slicedData = state.stok.slice(startIdx, endIdx);
+
+        slicedData.forEach(s => {
+            const p = state.produk.find(x => x.ID_Produk === s.ID_Produk);
+            const namaProduk = p ? p.Nama_Produk : 'Unknown';
+            aksiHTML = `
+                <div class="flex gap-2">
+                    <button class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" onclick="editInbound('${s.ID_Batch}')" title="Edit">
+                        <i data-lucide="edit" class="w-4 h-4"></i>
+                    </button>
+                    <button class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onclick="deleteInbound('${s.ID_Batch}')" title="Hapus">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            `;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td class="px-4 py-3">${s.Tanggal}</td>
+                    <td class="px-4 py-3">${s.ID_Batch}</td>
+                    <td class="px-4 py-3">${s.Nama_Supplier || '-'}</td>
+                    <td class="px-4 py-3">${s.No_Invoice_Supplier || '-'}</td>
+                    <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${namaProduk}</td>
+                    <td class="px-4 py-3">${s.Qty_Masuk}</td>
+                    <td class="px-4 py-3"><span class="font-bold text-slate-900 dark:text-slate-100">${s.Qty_Sisa}</span></td>
+                    <td class="px-4 py-3">Rp ${(s.Harga_Beli_Kotor || 0).toLocaleString('id-ID')}</td>
+                    <td class="px-4 py-3">${(s.Diskon_Supplier || 0)}%</td>
+                    <td class="px-4 py-3 font-medium">Rp ${(s.Harga_Beli_Bersih || 0).toLocaleString('id-ID')}</td>
+                    <td class="px-4 py-3">${aksiHTML}</td>
+                </tr>
+            `;
+        });
+
+        // Update Pagination Controls
+        const totalRows = state.stok.length;
+        const totalPages = Math.ceil(totalRows / inboundStokState.itemsPerPage) || 1;
+        const displayStart = totalRows === 0 ? 0 : startIdx + 1;
+        const displayEnd = Math.min(endIdx, totalRows);
+        
+        const paginationContainer = document.getElementById('pagination-inbound-stok');
+        if(paginationContainer) {
+            paginationContainer.innerHTML = `
+                <span>Menampilkan ${displayStart}-${displayEnd} dari ${totalRows} baris</span>
+                <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700">
+                    <button onclick="changePageInboundStok(-1)" ${inboundStokState.currentPage === 1 ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700 transition-colors rounded-l-lg disabled:opacity-50">Previous</button>
+                    <button disabled class="px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800/50">${inboundStokState.currentPage}</button>
+                    <button onclick="changePageInboundStok(1)" ${inboundStokState.currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-l border-slate-200 dark:border-slate-700 transition-colors rounded-r-lg disabled:opacity-50">Next</button>
+                </div>
+            `;
+        }
+        lucide.createIcons();
+    }
+
+    // --- INBOUND CART SYSTEM ---
+    let inboundCart = [];
+
+    function calculateInboundCartNetPrice() {
+        const hargaKotor = parseFloat(document.getElementById('inb_cart_harga_kotor').value) || 0;
+        const diskon = parseFloat(document.getElementById('inb_cart_diskon').value) || 0;
+        const hargaBersih = hargaKotor - (hargaKotor * (diskon / 100));
+        document.getElementById('inb_cart_harga_bersih').value = hargaBersih > 0 ? hargaBersih.toFixed(0) : 0;
+    }
+
+    function openModalInbound() {
+        inboundCart = [];
+        // Set today's date
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        document.getElementById('inb_tanggal').value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        document.getElementById('inb_inv_supplier').value = '';
+        // Reset cart input fields
+        const cartProduk = document.getElementById('inb_cart_produk');
+        if (cartProduk) cartProduk.selectedIndex = 0;
+        document.getElementById('inb_cart_qty').value = 1;
+        document.getElementById('inb_cart_harga_kotor').value = 0;
+        document.getElementById('inb_cart_diskon').value = 0;
+        document.getElementById('inb_cart_harga_bersih').value = '';
+        renderInboundCart();
+        populateProductSelects();
+        populateSupplierSelects();
+        const modal = new bootstrap.Modal(document.getElementById('modalInbound'));
+        modal.show();
+    }
+
+    function addInboundCartItem() {
+        const produkSelect = document.getElementById('inb_cart_produk');
+        const idProduk = produkSelect.value;
+        if (!idProduk) { alert('Pilih produk terlebih dahulu!'); return; }
+        const qty = parseInt(document.getElementById('inb_cart_qty').value) || 0;
+        if (qty <= 0) { alert('Qty harus lebih dari 0!'); return; }
+        const hargaKotor = parseFloat(document.getElementById('inb_cart_harga_kotor').value) || 0;
+        const diskon = parseFloat(document.getElementById('inb_cart_diskon').value) || 0;
+        const hargaBersih = parseFloat(document.getElementById('inb_cart_harga_bersih').value) || 0;
+        
+        const p = state.produk.find(x => x.ID_Produk === idProduk);
+        const namaProduk = p ? p.Nama_Produk : idProduk;
+        
+        inboundCart.push({
+            ID_Produk: idProduk,
+            Nama_Produk: namaProduk,
+            Qty_Masuk: qty,
+            Harga_Beli_Kotor: hargaKotor,
+            Diskon_Supplier: diskon,
+            Harga_Beli_Bersih: hargaBersih
+        });
+        
+        // Reset input fields for next item
+        produkSelect.selectedIndex = 0;
+        document.getElementById('inb_cart_qty').value = 1;
+        document.getElementById('inb_cart_harga_kotor').value = 0;
+        document.getElementById('inb_cart_diskon').value = 0;
+        document.getElementById('inb_cart_harga_bersih').value = '';
+        
+        renderInboundCart();
+    }
+
+    function removeInboundCartItem(index) {
+        inboundCart.splice(index, 1);
+        renderInboundCart();
+    }
+
+    function renderInboundCart() {
+        const tbody = document.getElementById('inbound-cart-items');
+        if (!tbody) return;
+        
+        if (inboundCart.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-slate-400 py-6">Belum ada item ditambahkan</td></tr>';
+            document.getElementById('inb_cart_total_items').textContent = '0';
+            document.getElementById('inb_cart_total_value').textContent = 'Rp 0';
+            return;
+        }
+        
+        let totalValue = 0;
+        tbody.innerHTML = '';
+        inboundCart.forEach((item, index) => {
+            const subtotal = item.Qty_Masuk * item.Harga_Beli_Bersih;
+            totalValue += subtotal;
+            tbody.innerHTML += `
+                <tr>
+                    <td class="px-4 py-3 text-slate-500">${index + 1}</td>
+                    <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${item.Nama_Produk}</td>
+                    <td class="px-4 py-3">${item.Qty_Masuk}</td>
+                    <td class="px-4 py-3">Rp ${item.Harga_Beli_Kotor.toLocaleString('id-ID')}</td>
+                    <td class="px-4 py-3">${item.Diskon_Supplier}%</td>
+                    <td class="px-4 py-3">Rp ${item.Harga_Beli_Bersih.toLocaleString('id-ID')}</td>
+                    <td class="px-4 py-3 font-medium">Rp ${subtotal.toLocaleString('id-ID')}</td>
+                    <td class="px-4 py-3">
+                        <button type="button" class="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" onclick="removeInboundCartItem(${index})">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        document.getElementById('inb_cart_total_items').textContent = inboundCart.length;
+        document.getElementById('inb_cart_total_value').textContent = 'Rp ' + totalValue.toLocaleString('id-ID');
+        lucide.createIcons();
+    }
+
+    function saveAllInbound() {
+        if (inboundCart.length === 0) {
+            alert('Tambahkan minimal 1 item ke keranjang!');
+            return;
+        }
+        const tanggal = document.getElementById('inb_tanggal').value;
+        const supplier = document.getElementById('inb_supplier').value;
+        const noInvoicePO = document.getElementById('inb_inv_supplier').value;
+        
+        if (!tanggal || !supplier || !noInvoicePO) {
+            alert('Lengkapi Tanggal, Supplier, dan No. Invoice PO!');
+            return;
+        }
+        
+        const btn = document.getElementById('btnSaveInbound');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Menyimpan...';
+        lucide.createIcons();
+        
+        const cartData = {
+            tanggal: tanggal,
+            supplier: supplier,
+            noInvoicePO: noInvoicePO,
+            items: inboundCart.map(item => ({
+                ID_Produk: item.ID_Produk,
+                Qty_Masuk: item.Qty_Masuk,
+                Harga_Beli_Kotor: item.Harga_Beli_Kotor,
+                Diskon_Supplier: item.Diskon_Supplier,
+                Harga_Beli_Bersih: item.Harga_Beli_Bersih
+            }))
+        };
+        
+        google.script.run.withSuccessHandler(result => {
+            alert(`Berhasil menyimpan ${result.count} item stok masuk (PO: ${result.noInvoicePO})`);
+            inboundCart = [];
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalInbound'));
+            modal.hide();
+            loadInitialData();
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Simpan Semua Stok';
+            lucide.createIcons();
+        }).withFailureHandler(err => {
+            alert('Gagal menyimpan: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Simpan Semua Stok';
+            lucide.createIcons();
+        }).saveBatchInbound(cartData);
+    }
+
+    // Legacy single-item save (kept for editInbound compatibility)
+    function saveInbound(e) {
+        if (e) e.preventDefault();
+        const btn = document.getElementById('btnSaveInbound');
+        btn.disabled = true;
+        btn.innerHTML = 'Menyimpan...';
+
+        const inbound = {
+            ID_Batch: document.getElementById('inb_id_batch') ? document.getElementById('inb_id_batch').value : '',
+            Tanggal: document.getElementById('inb_tanggal').value,
+            Nama_Supplier: document.getElementById('inb_supplier').value,
+            No_Invoice_Supplier: document.getElementById('inb_inv_supplier').value,
+            ID_Produk: document.getElementById('inb_produk') ? document.getElementById('inb_produk').value : '',
+            Qty_Masuk: document.getElementById('inb_qty') ? document.getElementById('inb_qty').value : 0,
+            Harga_Beli_Kotor: document.getElementById('inb_harga_kotor') ? document.getElementById('inb_harga_kotor').value : 0,
+            Diskon_Supplier: document.getElementById('inb_diskon') ? document.getElementById('inb_diskon').value : 0,
+            Harga_Beli_Bersih: document.getElementById('inb_harga_bersih') ? document.getElementById('inb_harga_bersih').value : 0
+        };
+
+        google.script.run.withSuccessHandler(() => {
+            loadInitialData();
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalInbound'));
+            if (modal) modal.hide();
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="save" class="w-4 h-4"></i> Simpan Semua Stok';
+            lucide.createIcons();
+        }).saveInboundStok(inbound);
+    }
+
+    function editInbound(idBatch) {
+        const s = state.stok.find(x => x.ID_Batch === idBatch);
+        if (s) {
+            // For editing, we delete the old batch and let user re-enter via cart
+            if (confirm('Untuk mengedit, data lama akan dihapus dan Anda bisa memasukkan ulang via keranjang. Lanjutkan?')) {
+                showLoading(true);
+                google.script.run.withSuccessHandler((success) => {
+                    if (success) {
+                        loadInitialData();
+                        // After delete, open modal pre-filled
+                        setTimeout(() => {
+                            openModalInbound();
+                            document.getElementById('inb_tanggal').value = s.Tanggal;
+                            document.getElementById('inb_inv_supplier').value = s.No_Invoice_Supplier || '';
+                            // Pre-select supplier after selects are populated
+                            const supplierSel = document.getElementById('inb_supplier');
+                            if (supplierSel) {
+                                for (let i = 0; i < supplierSel.options.length; i++) {
+                                    if (supplierSel.options[i].value === (s.Nama_Supplier || '')) {
+                                        supplierSel.selectedIndex = i;
+                                        break;
+                                    }
+                                }
+                            }
+                            // Pre-add the item to cart
+                            const p = state.produk.find(x => x.ID_Produk === s.ID_Produk);
+                            inboundCartItems = [{
+                                ID_Produk: s.ID_Produk,
+                                Nama_Produk: p ? p.Nama_Produk : s.ID_Produk,
+                                Qty_Masuk: s.Qty_Masuk,
+                                Harga_Beli_Kotor: s.Harga_Beli_Kotor || 0,
+                                Diskon_Supplier: s.Diskon_Supplier || 0,
+                                Harga_Beli_Bersih: s.Harga_Beli_Bersih || 0
+                            }];
+                            renderInboundCart();
+                        }, 500);
+                    } else {
+                        alert('Gagal menghapus! Stok mungkin sudah terpakai.');
+                        showLoading(false);
+                    }
+                }).deleteInboundData(idBatch);
+            }
+        }
+    }
+
+    }
+
+    // --- SUPPLIER LOGIC ---
+    function openModalSupplier() {
+        document.getElementById('formSupplier').reset();
+        document.getElementById('sup_id').value = '';
+        const modal = new bootstrap.Modal(document.getElementById('modalSupplier'));
+        modal.show();
+    }
+
+    function saveSupplier(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btnSaveSupplier');
+        btn.disabled = true;
+        btn.innerHTML = 'Menyimpan...';
+
+        const supplier = {
+            ID_Supplier: document.getElementById('sup_id').value,
+            Nama: document.getElementById('sup_nama').value,
+            Alamat: document.getElementById('sup_alamat').value,
+            No_Tlp: document.getElementById('sup_notlp').value
+        };
+
+        google.script.run.withSuccessHandler(() => {
+            loadInitialData(); 
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalSupplier'));
+            modal.hide();
+            btn.disabled = false;
+            btn.innerHTML = 'Simpan Supplier';
+        }).saveMasterSupplier(supplier);
+    }
+
+    // --- DASHBOARD METRICS ---
+    let dashChartInstance = null;
+
+    function setDashFilterHariIni() {
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        document.getElementById('dash_filter_start').value = today;
+        document.getElementById('dash_filter_end').value = today;
+        applyDashboardFilter();
+    }
+
+    function setDashFilterBulanIni() {
+        const d = new Date();
+        const start = new Date(d.getFullYear(), d.getMonth(), 1);
+        const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        
+        const pad = n => String(n).padStart(2, '0');
+        document.getElementById('dash_filter_start').value = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`;
+        document.getElementById('dash_filter_end').value = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`;
+        applyDashboardFilter();
+    }
+
+    function setDashFilterTahunIni() {
+        const d = new Date();
+        document.getElementById('dash_filter_start').value = `${d.getFullYear()}-01-01`;
+        document.getElementById('dash_filter_end').value = `${d.getFullYear()}-12-31`;
+        applyDashboardFilter();
+    }
+
+    function applyDashboardFilter() {
+        updateDashboardMetrics();
+    }
+
+    function updateDashboardMetrics() {
+        const start = document.getElementById('dash_filter_start').value;
+        const end = document.getElementById('dash_filter_end').value;
+
+        // F. Aset Gudang (Ignores date filter)
+        let totalAset = 0;
+        state.inventorySummary.forEach(s => {
+            totalAset += s.Nilai_Aset;
+        });
+        const elAset = document.getElementById('dash-aset');
+        if(elAset) elAset.textContent = totalAset.toLocaleString('id-ID');
+        
+        const elTotalValuasi = document.getElementById('inv-total-valuasi');
+        if(elTotalValuasi) elTotalValuasi.textContent = totalAset.toLocaleString('id-ID');
+        
+        // Filter Invoices
+        let filteredInvoices = state.invoices || [];
+        if (start) filteredInvoices = filteredInvoices.filter(i => i.Tanggal >= start);
+        if (end) filteredInvoices = filteredInvoices.filter(i => i.Tanggal <= end);
+
+        // Filter Pengeluaran
+        let filteredPengeluaran = state.pengeluaran || [];
+        if (start) filteredPengeluaran = filteredPengeluaran.filter(p => p.Tanggal >= start);
+        if (end) filteredPengeluaran = filteredPengeluaran.filter(p => p.Tanggal <= end);
+
+        // Filter Retur
+        let filteredRetur = state.retur || [];
+        if (start) filteredRetur = filteredRetur.filter(r => r.Tanggal >= start);
+        if (end) filteredRetur = filteredRetur.filter(r => r.Tanggal <= end);
+
+        // Calculate Metrics
+        let totalOmset = 0;
+        let labaKotor = 0;
+        let labaBersih = 0;
+        
+        filteredInvoices.forEach(inv => {
+            let omset = parseFloat(inv.Total_Omset) || 0;
+            let hpp = parseFloat(inv.Total_HPP) || 0;
+            let feeToko = parseFloat(inv.Total_Fee_Admin) || 0;
+            
+            totalOmset += omset;
+            labaKotor += (omset - hpp - feeToko);
+        });
+        
+        let totalPengeluaranOp = 0;
+        filteredPengeluaran.forEach(p => {
+            totalPengeluaranOp += parseFloat(p.Nominal) || 0;
+        });
+
+        // Kerugian Retur is already captured in Pengeluaran, so just subtract Pengeluaran
+        labaBersih = labaKotor - totalPengeluaranOp;
+
+        const elOmset = document.getElementById('dash-omset');
+        const elLabaKotor = document.getElementById('dash-laba-kotor');
+        const elLabaBersih = document.getElementById('dash-laba-bersih');
+        const elTotalInv = document.getElementById('dash-total-invoice');
+        const elTotalRetur = document.getElementById('dash-total-retur');
+
+        if(elOmset) elOmset.textContent = totalOmset.toLocaleString('id-ID');
+        if(elLabaKotor) elLabaKotor.textContent = labaKotor.toLocaleString('id-ID');
+        if(elLabaBersih) elLabaBersih.textContent = labaBersih.toLocaleString('id-ID');
+        if(elTotalInv) elTotalInv.textContent = filteredInvoices.length.toLocaleString('id-ID');
+        
+        let sumReturItems = 0;
+        filteredRetur.forEach(r => sumReturItems += parseInt(r.Qty) || 0);
+        if(elTotalRetur) elTotalRetur.textContent = sumReturItems.toLocaleString('id-ID');
+
+        // Update Chart
+        renderDashboardChart(filteredInvoices);
+        
+        // Render Top Products (backend fetch)
+        const tbodyTop = document.getElementById('tbody-top-products');
+        if(tbodyTop) {
+            tbodyTop.innerHTML = '<tr><td colspan="2" class="px-4 py-8 text-center text-slate-500">Memuat...</td></tr>';
+            google.script.run.withSuccessHandler(topProds => {
+                tbodyTop.innerHTML = '';
+                if(topProds.length === 0) {
+                    tbodyTop.innerHTML = '<tr><td colspan="2" class="px-4 py-8 text-center text-slate-500">Belum ada data penjualan</td></tr>';
+                    return;
+                }
+                topProds.forEach(item => {
+                    const p = state.produk.find(x => x.ID_Produk === item.id);
+                    const nama = p ? p.Nama_Produk : item.id;
+                    tbodyTop.innerHTML += `
+                        <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                            <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${nama}</td>
+                            <td class="px-4 py-3 text-right font-bold text-slate-900 dark:text-slate-100">${item.qty}</td>
+                        </tr>
+                    `;
+                });
+            }).getTopProducts(start, end);
+        }
+    }
+
+    function renderDashboardChart(filteredInvoices) {
+        const ctx = document.getElementById('chartTrenPenjualan');
+        if (!ctx) return;
+
+        // Group by Date
+        const grouped = {};
+        filteredInvoices.forEach(inv => {
+            if (!grouped[inv.Tanggal]) grouped[inv.Tanggal] = 0;
+            grouped[inv.Tanggal] += parseFloat(inv.Total_Omset) || 0;
+        });
+
+        // Sort keys
+        const labels = Object.keys(grouped).sort();
+        const data = labels.map(l => grouped[l]);
+
+        if (dashChartInstance) {
+            dashChartInstance.destroy();
+        }
+
+        dashChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels.length > 0 ? labels : ['Belum ada data'],
+                datasets: [{
+                    label: 'Omset Penjualan (Rp)',
+                    data: data.length > 0 ? data : [0],
+                    borderColor: '#0f172a',
+                    backgroundColor: 'rgba(15, 23, 42, 0.05)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.3,
+                    pointBackgroundColor: '#0f172a',
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += 'Rp ' + context.parsed.y.toLocaleString('id-ID');
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: { 
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value, index, values) {
+                                return 'Rp ' + value.toLocaleString('id-ID');
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // --- FINANCE LOGIC ---
+    function renderFinance() {
+        const tbodyBelum = document.getElementById('tbody-finance-belum');
+        const tbodySudah = document.getElementById('tbody-finance-sudah');
+        if (!tbodyBelum || !tbodySudah) return;
+        
+        tbodyBelum.innerHTML = '';
+        tbodySudah.innerHTML = '';
+        
+        let totalBelum = 0;
+        let totalSudah = 0;
+        
+        if(state.invoices) {
+            state.invoices.forEach(inv => {
+                const laba = parseFloat(inv.Laba_Bersih) || 0;
+                if(inv.Status_Dana === 'Belum') {
+                    totalBelum += laba;
+                    tbodyBelum.innerHTML += `
+                        <tr>
+                            <td class="px-4 py-3">${inv.Tanggal}</td>
+                            <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${inv.No_Invoice}</td>
+                            <td class="px-4 py-3">${inv.Marketplace}</td>
+                            <td class="px-4 py-3">${inv.Nama_Toko}</td>
+                            <td class="px-4 py-3">Rp ${laba.toLocaleString('id-ID')}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-2">
+                                    <select id="rek_${inv.No_Invoice}" class="px-2 py-1 border border-slate-200 dark:border-slate-600 rounded text-xs bg-transparent focus:ring-1 focus:ring-slate-400 outline-none">
+                                        <option value="BCA">BCA</option>
+                                        <option value="BNI">BNI</option>
+                                        <option value="BRI">BRI</option>
+                                        <option value="MANDIRI">MANDIRI</option>
+                                    </select>
+                                    <button class="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-medium rounded hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors text-xs" onclick="withdrawDana('${inv.No_Invoice}')">Cairkan</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                } else if(inv.Status_Dana === 'Sudah') {
+                    totalSudah += laba;
+                    tbodySudah.innerHTML += `
+                        <tr>
+                            <td class="px-4 py-3">${inv.Tanggal_Withdraw || inv.Tanggal}</td>
+                            <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${inv.No_Invoice}</td>
+                            <td class="px-4 py-3">${inv.Marketplace}</td>
+                            <td class="px-4 py-3">${inv.Nama_Toko}</td>
+                            <td class="px-4 py-3">Rp ${laba.toLocaleString('id-ID')}</td>
+                        </tr>
+                    `;
+                }
+            });
+        }
+        
+        const elBelum = document.getElementById('fin-belum-cair');
+        const elSudah = document.getElementById('fin-sudah-cair');
+        if(elBelum) elBelum.textContent = `Rp ${totalBelum.toLocaleString('id-ID')}`;
+        if(elSudah) elSudah.textContent = `Rp ${totalSudah.toLocaleString('id-ID')}`;
+    }
+
+    // --- PENGELUARAN LOGIC ---
+    function renderPengeluaran() {
+        const tbody = document.getElementById('tbody-finance-pengeluaran');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        if(state.pengeluaran) {
+            state.pengeluaran.forEach((p, idx) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="px-4 py-3">${p.Tanggal}</td>
+                        <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${p.Kategori}</td>
+                        <td class="px-4 py-3">Rp ${(parseFloat(p.Nominal) || 0).toLocaleString('id-ID')}</td>
+                        <td class="px-4 py-3 text-slate-500 dark:text-slate-400">${p.Keterangan}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex gap-1">
+                                <button class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" onclick='editPengeluaran(${JSON.stringify(p)})'>
+                                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                                </button>
+                                <button class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onclick='deletePengeluaran(${JSON.stringify(p)})'>
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+        lucide.createIcons();
+    }
+
+    function openModalPengeluaran() {
+        document.getElementById('formPengeluaran').reset();
+        
+        const d = new Date();
+        const str = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,'0') + "-" + String(d.getDate()).padStart(2,'0');
+        document.getElementById('peng_tanggal').value = str;
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalPengeluaran'));
+        modal.show();
+    }
+
+    function savePengeluaran(e) {
+        e.preventDefault();
+        
+        const data = {
+            Tanggal: document.getElementById('peng_tanggal').value,
+            Kategori: document.getElementById('peng_kategori').value,
+            Nominal: document.getElementById('peng_nominal').value,
+            Keterangan: document.getElementById('peng_keterangan').value,
+            Rekening: document.getElementById('peng_rekening').value
+        };
+        
+        const btn = document.getElementById('btnSavePengeluaran');
+        btn.disabled = true;
+        btn.innerText = 'Menyimpan...';
+        
+        google.script.run.withSuccessHandler((res) => {
+            const modalEl = document.getElementById('modalPengeluaran');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            modal.hide();
+            loadInitialData();
+            btn.disabled = false;
+            btn.innerText = 'Simpan';
+        }).savePengeluaran(data);
+    }
+
+    function deletePengeluaran(peng) {
+        if(confirm('Hapus riwayat pengeluaran ini?')) {
+            showLoading(true);
+            google.script.run.withSuccessHandler((res) => {
+                loadInitialData();
+            }).deletePengeluaranByData(peng);
+        }
+    }
+
+    function withdrawDana(noInvoice) {
+        const rekSelect = document.getElementById('rek_' + noInvoice);
+        const rekening = rekSelect ? rekSelect.value : 'BCA';
+        if(confirm('Cairkan dana invoice ' + noInvoice + ' ke rekening ' + rekening + '?')) {
+            showLoading(true);
+            google.script.run.withSuccessHandler((success) => {
+                if(success) loadInitialData();
+                else { alert('Gagal memproses withdraw.'); showLoading(false); }
+            }).processWithdraw(noInvoice, rekening);
+        }
+    }
+
+    // --- BUKU KAS / MUTASI KAS ---
+    const mutasiKasState = { currentPage: 1, itemsPerPage: 10 };
+
+    function renderSaldoKas() {
+        const elSaldo = document.getElementById('fin-saldo-kas');
+        const elMasuk = document.getElementById('fin-uang-masuk');
+        const elKeluar = document.getElementById('fin-uang-keluar');
+        
+        let saldo = 0;
+        let totalMasuk = 0;
+        let totalKeluar = 0;
+        
+        if (state.bukuKas && state.bukuKas.length > 0) {
+            state.bukuKas.forEach(entry => {
+                const masuk = parseFloat(entry.Masuk_Debit) || 0;
+                const keluar = parseFloat(entry.Keluar_Kredit) || 0;
+                totalMasuk += masuk;
+                totalKeluar += keluar;
+            });
+            const lastEntry = state.bukuKas[state.bukuKas.length - 1];
+            saldo = parseFloat(lastEntry.Saldo_Berjalan) || 0;
+        }
+        
+        if (elSaldo) elSaldo.textContent = `Rp ${saldo.toLocaleString('id-ID')}`;
+        if (elMasuk) elMasuk.textContent = `Rp ${totalMasuk.toLocaleString('id-ID')}`;
+        if (elKeluar) elKeluar.textContent = `Rp ${totalKeluar.toLocaleString('id-ID')}`;
+        
+        // Also refresh individual bank balances
+        refreshBankBalances();
+    }
+
+    function refreshBankBalances() {
+        google.script.run
+            .withSuccessHandler(balances => {
+                ['BCA', 'BNI', 'BRI', 'MANDIRI'].forEach(bank => {
+                    const el = document.getElementById('fin-saldo-' + bank);
+                    if (el) {
+                        el.textContent = `Rp ${(balances[bank] || 0).toLocaleString('id-ID')}`;
+                    }
+                });
+            })
+            .getBalancesPerBank();
+    }
+
+    function renderMutasiKas() {
+        const tbody = document.getElementById('tbody-mutasi-kas');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        // Reverse order (newest first)
+        const reversedData = [...(state.bukuKas || [])].reverse();
+        const totalRows = reversedData.length;
+        const totalPages = Math.ceil(totalRows / mutasiKasState.itemsPerPage) || 1;
+        if (mutasiKasState.currentPage > totalPages) mutasiKasState.currentPage = totalPages;
+
+        const startIdx = (mutasiKasState.currentPage - 1) * mutasiKasState.itemsPerPage;
+        const endIdx = startIdx + mutasiKasState.itemsPerPage;
+        const slicedData = reversedData.slice(startIdx, endIdx);
+
+        if (slicedData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">Belum ada mutasi kas</td></tr>';
+        } else {
+            slicedData.forEach(entry => {
+                const masuk = parseFloat(entry.Masuk_Debit) || 0;
+                const keluar = parseFloat(entry.Keluar_Kredit) || 0;
+                const saldo = parseFloat(entry.Saldo_Berjalan) || 0;
+
+                let tipeBadge = '';
+                if (entry.Tipe_Transaksi === 'Modal') {
+                    tipeBadge = '<span class="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded text-xs font-medium">Modal</span>';
+                } else if (entry.Tipe_Transaksi === 'Pencairan Penjualan') {
+                    tipeBadge = '<span class="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded text-xs font-medium">Pencairan</span>';
+                } else {
+                    tipeBadge = '<span class="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded text-xs font-medium">Pengeluaran</span>';
+                }
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="px-4 py-3">${entry.Tanggal}</td>
+                        <td class="px-4 py-3">${tipeBadge}</td>
+                        <td class="px-4 py-3"><span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-xs font-medium">${entry.Rekening || '-'}</span></td>
+                        <td class="px-4 py-3 text-slate-600 dark:text-slate-300">${entry.Keterangan || '-'}</td>
+                        <td class="px-4 py-3 text-right font-medium ${masuk > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}">${masuk > 0 ? 'Rp ' + masuk.toLocaleString('id-ID') : '-'}</td>
+                        <td class="px-4 py-3 text-right font-medium ${keluar > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400'}">${keluar > 0 ? 'Rp ' + keluar.toLocaleString('id-ID') : '-'}</td>
+                        <td class="px-4 py-3 text-right font-bold text-slate-900 dark:text-slate-100">Rp ${saldo.toLocaleString('id-ID')}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Pagination
+        const displayStart = totalRows === 0 ? 0 : startIdx + 1;
+        const displayEnd = Math.min(endIdx, totalRows);
+        const paginationContainer = document.getElementById('pagination-mutasi-kas');
+        if (paginationContainer) {
+            paginationContainer.innerHTML = `
+                <span>Menampilkan ${displayStart}-${displayEnd} dari ${totalRows} baris</span>
+                <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700">
+                    <button onclick="changePageMutasiKas(-1)" ${mutasiKasState.currentPage === 1 ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700 transition-colors rounded-l-lg disabled:opacity-50">Previous</button>
+                    <button disabled class="px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800/50">${mutasiKasState.currentPage}</button>
+                    <button onclick="changePageMutasiKas(1)" ${mutasiKasState.currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-l border-slate-200 dark:border-slate-700 transition-colors rounded-r-lg disabled:opacity-50">Next</button>
+                </div>
+            `;
+        }
+        lucide.createIcons();
+    }
+
+    function changePageMutasiKas(delta) {
+        mutasiKasState.currentPage += delta;
+        renderMutasiKas();
+    }
+
+    // --- TAMBAH MODAL (Capital Injection) ---
+    function openModalTambahModal() {
+        document.getElementById('formTambahModal').reset();
+        document.getElementById('modal_keterangan').value = 'Penambahan Modal';
+        const d = new Date();
+        const str = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,'0') + "-" + String(d.getDate()).padStart(2,'0');
+        document.getElementById('modal_tanggal').value = str;
+        const modal = new bootstrap.Modal(document.getElementById('modalTambahModal'));
+        modal.show();
+    }
+
+    function saveTambahModal(e) {
+        e.preventDefault();
+        const data = {
+            Tanggal: document.getElementById('modal_tanggal').value,
+            Nominal: document.getElementById('modal_nominal').value,
+            Keterangan: document.getElementById('modal_keterangan').value,
+            Rekening: document.getElementById('modal_rekening').value
+        };
+
+        const btn = document.getElementById('btnSaveTambahModal');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Menyimpan...';
+        lucide.createIcons();
+
+        google.script.run.withSuccessHandler(result => {
+            alert('Modal berhasil ditambahkan! Saldo baru: Rp ' + (result.saldoBaru || 0).toLocaleString('id-ID'));
+            const modalEl = document.getElementById('modalTambahModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            modal.hide();
+            loadInitialData();
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="landmark" class="w-4 h-4"></i> Simpan Modal';
+            lucide.createIcons();
+        }).withFailureHandler(err => {
+            alert('Gagal: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="landmark" class="w-4 h-4"></i> Simpan Modal';
+            lucide.createIcons();
+        }).tambahModal(data);
+    }
+
+    // --- RETUR LOGIC ---
+    let currentReturDetails = [];
+    function cariInvoiceRetur() {
+        const noInvoice = document.getElementById('ret_no_invoice').value.trim();
+        if(!noInvoice) return;
+        
+        const btn = event.target;
+        btn.disabled = true;
+        btn.innerText = '...';
+        
+        google.script.run.withSuccessHandler(details => {
+            btn.disabled = false;
+            btn.innerText = 'Cari';
+            
+            if(details && details.length > 0) {
+                currentReturDetails = details;
+                const selectProduk = document.getElementById('ret_produk');
+                selectProduk.disabled = false;
+                selectProduk.innerHTML = '<option value="">-- Pilih Produk --</option>';
+                details.forEach(d => {
+                    const p = state.produk.find(x => x.ID_Produk === d.ID_Produk);
+                    const nama = p ? p.Nama_Produk : d.ID_Produk;
+                    selectProduk.innerHTML += `<option value="${d.ID_Produk}">${nama} (Terjual: ${d.Qty})</option>`;
+                });
+                
+                document.getElementById('ret_qty').disabled = false;
+                document.getElementById('ret_kondisi').disabled = false;
+                document.getElementById('ret_kerugian').disabled = false;
+                document.getElementById('btnSaveRetur').disabled = false;
+                
+                // CHECK STATUS DANA
+                const originalInv = state.invoices.find(inv => inv.No_Invoice === noInvoice);
+                if(originalInv && originalInv.Status_Dana === 'Sudah') {
+                    document.getElementById('ret_warning_dana').classList.remove('hidden');
+                    const targetGroup = document.getElementById('ret_target_group');
+                    targetGroup.classList.remove('hidden');
+                    const targetSelect = document.getElementById('ret_target_invoice');
+                    targetSelect.disabled = false;
+                    targetSelect.innerHTML = '<option value="">-- Pilih Invoice Pending --</option>';
+                    
+                    const pendingInvoices = state.invoices.filter(i => i.Status_Dana === 'Belum');
+                    pendingInvoices.forEach(i => {
+                        targetSelect.innerHTML += `<option value="${i.No_Invoice}">${i.No_Invoice} (${i.Marketplace} - ${i.Nama_Toko})</option>`;
+                    });
+                } else {
+                    document.getElementById('ret_warning_dana').classList.add('hidden');
+                    document.getElementById('ret_target_group').classList.add('hidden');
+                    document.getElementById('ret_target_invoice').disabled = true;
+                }
+            } else {
+                alert('Invoice tidak ditemukan atau tidak memiliki detail produk.');
+                document.getElementById('formRetur').reset();
+                disableReturForm();
+            }
+        }).getInvoiceDetails(noInvoice);
+    }
+
+    function disableReturForm() {
+        document.getElementById('ret_produk').disabled = true;
+        document.getElementById('ret_qty').disabled = true;
+        document.getElementById('ret_kondisi').disabled = true;
+        document.getElementById('ret_kerugian').disabled = true;
+        document.getElementById('btnSaveRetur').disabled = true;
+        document.getElementById('ret_warning_dana').classList.add('hidden');
+        document.getElementById('ret_target_group').classList.add('hidden');
+        document.getElementById('ret_target_invoice').disabled = true;
+        currentReturDetails = [];
+    }
+
+    function onReturProductChange() {
+        const idProduk = document.getElementById('ret_produk').value;
+        const inputQty = document.getElementById('ret_qty');
+        if(idProduk) {
+            const detail = currentReturDetails.find(d => d.ID_Produk === idProduk);
+            if(detail) {
+                inputQty.max = detail.Qty;
+                inputQty.value = 1;
+            }
+        } else {
+            inputQty.value = '';
+        }
+    }
+
+    function saveRetur(e) {
+        e.preventDefault();
+        
+        const qty = parseInt(document.getElementById('ret_qty').value);
+        const maxQty = parseInt(document.getElementById('ret_qty').max);
+        
+        if(qty > maxQty) {
+            alert('Qty retur melebihi qty yang dibeli!');
+            return;
+        }
+        
+        const btn = document.getElementById('btnSaveRetur');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Memproses...';
+        lucide.createIcons();
+        
+        let targetInvoice = document.getElementById('ret_no_invoice').value;
+        const originalInv = state.invoices.find(inv => inv.No_Invoice === targetInvoice);
+        if(originalInv && originalInv.Status_Dana === 'Sudah') {
+            targetInvoice = document.getElementById('ret_target_invoice').value;
+            if(!targetInvoice) {
+                alert('Pilih invoice target potongan karena invoice asli sudah cair!');
+                btn.disabled = false;
+                btn.innerHTML = 'Proses Retur';
+                return;
+            }
+        }
+        
+        const returData = {
+            No_Invoice_Asli: document.getElementById('ret_no_invoice').value,
+            Target_Invoice_Potongan: targetInvoice,
+            ID_Produk: document.getElementById('ret_produk').value,
+            Qty: qty,
+            Kondisi: document.getElementById('ret_kondisi').value,
+            Kerugian_Manual: parseFloat(document.getElementById('ret_kerugian').value) || 0
+        };
+        
+        google.script.run.withSuccessHandler((res) => {
+            alert('Retur berhasil diproses: ' + res);
+            document.getElementById('formRetur').reset();
+            disableReturForm();
+            loadInitialData();
+            btn.disabled = false;
+            btn.innerHTML = 'Proses Retur';
+        }).processRetur(returData);
+    }
+
+    function changePageRetur(delta) {
+        const totalPages = Math.ceil(state.retur.length / returState.itemsPerPage) || 1;
+        returState.currentPage += delta;
+        if (returState.currentPage < 1) returState.currentPage = 1;
+        if (returState.currentPage > totalPages) returState.currentPage = totalPages;
+        renderRetur();
+    }
+
+    function renderRetur() {
+        const tbody = document.getElementById('tbody-retur');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        
+        const startIdx = (returState.currentPage - 1) * returState.itemsPerPage;
+        const endIdx = startIdx + returState.itemsPerPage;
+        const slicedData = state.retur.slice(startIdx, endIdx);
+
+        if(slicedData) {
+            slicedData.forEach(r => {
+                const p = state.produk.find(x => x.ID_Produk === r.ID_Produk);
+                const nama = p ? p.Nama_Produk : r.ID_Produk;
+                const badgeClass = r.Kondisi === 'Bagus' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700';
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="px-4 py-3">${r.Tanggal}</td>
+                        <td class="px-4 py-3">${r.ID_Retur}</td>
+                        <td class="px-4 py-3">${r.No_Invoice_Asli}</td>
+                        <td class="px-4 py-3 font-medium">${nama}</td>
+                        <td class="px-4 py-3">${r.Qty}</td>
+                        <td class="px-4 py-3"><span class="px-2.5 py-1 rounded-lg text-xs font-medium ${badgeClass}">${r.Kondisi}</span></td>
+                        <td class="px-4 py-3">${r.Beban_Dipotong_Dari_Invoice_No || r.No_Invoice_Asli}</td>
+                        <td class="px-4 py-3 text-red-600">Rp ${(parseFloat(r.Kerugian_Manual) || 0).toLocaleString('id-ID')}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex gap-1">
+                                <button class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" onclick="editRetur('${r.ID_Retur}')">
+                                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                                </button>
+                                <button class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onclick="deleteRetur('${r.ID_Retur}')">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Update Pagination Controls
+        const totalRows = state.retur.length;
+        const totalPages = Math.ceil(totalRows / returState.itemsPerPage) || 1;
+        const displayStart = totalRows === 0 ? 0 : startIdx + 1;
+        const displayEnd = Math.min(endIdx, totalRows);
+        
+        const paginationContainer = document.getElementById('pagination-retur');
+        if(paginationContainer) {
+            paginationContainer.innerHTML = `
+                <span>Menampilkan ${displayStart}-${displayEnd} dari ${totalRows} baris</span>
+                <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700">
+                    <button onclick="changePageRetur(-1)" ${returState.currentPage === 1 ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700 transition-colors rounded-l-lg disabled:opacity-50">Previous</button>
+                    <button disabled class="px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800/50">${returState.currentPage}</button>
+                    <button onclick="changePageRetur(1)" ${returState.currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-l border-slate-200 dark:border-slate-700 transition-colors rounded-r-lg disabled:opacity-50">Next</button>
+                </div>
+            `;
+        }
+    }
+
+    // --- STOCK KRISIS CARD ---
+    function renderStokKrisis() {
+        const el = document.getElementById('card-stok-krisis');
+        if (!el) return;
+        
+        if (!state.inventorySummary || state.inventorySummary.length === 0) {
+            el.innerHTML = '<p class="text-slate-400 text-xs">Tidak ada data stok</p>';
+            return;
+        }
+        
+        const sorted = [...state.inventorySummary]
+            .sort((a, b) => (a.Total_Stok || 0) - (b.Total_Stok || 0))
+            .slice(0, 5);
+        
+        el.innerHTML = sorted.map(s => {
+            const qtyClass = s.Total_Stok <= 5 ? 'text-rose-600 font-bold' : s.Total_Stok <= 20 ? 'text-amber-600 font-semibold' : 'text-slate-700 dark:text-slate-300';
+            return `<div class="flex justify-between items-center">
+                <span class="text-slate-600 dark:text-slate-300 truncate mr-2">${s.Nama_Produk}</span>
+                <span class="${qtyClass} text-xs tabular-nums">${s.Total_Stok} pcs</span>
+            </div>`;
+        }).join('');
+    }
+
+    // --- RETUR SUMMARY CARD ---
+    function renderReturSummaryCard() {
+        const elRusak = document.getElementById('card-retur-rusak');
+        const elBagus = document.getElementById('card-retur-bagus');
+        if (!elRusak || !elBagus) return;
+        
+        let totalRusak = 0;
+        let totalBagus = 0;
+        
+        if (state.retur) {
+            state.retur.forEach(r => {
+                const qty = parseInt(r.Qty) || 0;
+                if (r.Kondisi === 'Rusak') totalRusak += qty;
+                else totalBagus += qty;
+            });
+        }
+        
+        elRusak.textContent = totalRusak;
+        elBagus.textContent = totalBagus;
+    }
+
+    // --- GLOBAL TAB LOGIC ---
+    function switchTab(tabId, groupName) {
+        // 1. Hide all contents in this group
+        const contents = document.querySelectorAll('.tab-content-' + groupName);
+        contents.forEach(el => el.classList.add('hidden'));
+        
+        // 2. Deactivate all buttons in this group
+        const buttons = document.querySelectorAll('.tab-btn-' + groupName);
+        buttons.forEach(el => {
+            el.classList.remove('border-indigo-600', 'text-indigo-600');
+            el.classList.add('border-transparent', 'text-slate-500');
+        });
+        
+        // 3. Show target content
+        const target = document.getElementById(tabId);
+        if (target) target.classList.remove('hidden');
+        
+        // 4. Activate clicked button
+        const clickedBtn = document.querySelector(`[data-tab="${tabId}"]`);
+        if (clickedBtn) {
+            clickedBtn.classList.remove('border-transparent', 'text-slate-500');
+            clickedBtn.classList.add('border-indigo-600', 'text-indigo-600');
+        }
+        
+        // Re-init Lucide icons if any in the newly shown tab
+        if(typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    // --- CRUD ACTION FUNCTIONS ---
+    function deleteInbound(idBatch) {
+        if (!confirm('Hapus data inbound batch ' + idBatch + '? Stok akan berkurang. Tindakan ini tidak dapat dibatalkan.')) return;
+        
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(res => {
+                showLoading(false);
+                if(res.success) {
+                    showToast('Data inbound berhasil dihapus', 'success');
+                    loadInitialData(); 
+                } else {
+                    showToast(res.message || 'Gagal menghapus data', 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                showLoading(false);
+                showToast('Error: ' + err.message, 'error');
+            })
+            .deleteInboundData(idBatch);
+    }
+
+    function editPengeluaran(peng) {
+        // Logic to open modal and fill with 'peng' data
+        console.log('Edit Pengeluaran:', peng);
+        alert('Fitur Edit Pengeluaran sedang disiapkan.');
+    }
+
+    function editRetur(idRetur) {
+        console.log('Edit Retur:', idRetur);
+        alert('Fitur Edit Retur ' + idRetur + ' sedang disiapkan.');
+    }
+
+    function deleteRetur(idRetur) {
+        if (!confirm('Hapus data retur ' + idRetur + '? Stok akan dikembalikan sesuai kondisi.')) return;
+        
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(res => {
+                showLoading(false);
+                if(res.success) {
+                    showToast('Data retur berhasil dihapus', 'success');
+                    loadInitialData();
+                } else {
+                    showToast(res.message || 'Gagal menghapus data', 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                showLoading(false);
+                showToast('Error: ' + err.message, 'error');
+            })
+            .deleteReturData(idRetur); // We need this backend function
+    }
+
+    // --- INVOICE LOGIC ---
+    let invoiceItems = [];
+
+    function addInvoiceItemRow() {
+        invoiceItems.push({
+            ID_Produk: '',
+            Qty: 1,
+            Harga_Jual_Aktual: 0
+        });
+        renderInvoiceItems();
+        calculateInvoice();
+    }
+
+    function removeInvoiceItem(index) {
+        invoiceItems.splice(index, 1);
+        renderInvoiceItems();
+        calculateInvoice();
+    }
+
+    function updateInvoiceItem(index, field, value) {
+        if(field === 'ID_Produk') {
+            invoiceItems[index].ID_Produk = value;
+            const p = state.produk.find(x => x.ID_Produk === value);
+            if(p) {
+                invoiceItems[index].Harga_Jual_Aktual = p.Harga_Jual_Default;
+            } else {
+                invoiceItems[index].Harga_Jual_Aktual = 0;
+            }
+        } else if (field === 'Qty') {
+            invoiceItems[index].Qty = parseInt(value) || 0;
+        } else if (field === 'Harga_Jual_Aktual') {
+            invoiceItems[index].Harga_Jual_Aktual = parseFloat(value) || 0;
+        }
+        
+        renderInvoiceItems();
+        calculateInvoice();
+    }
+
+    function renderInvoiceItems() {
+        const tbody = document.getElementById('invoice-items');
+        if(!tbody) return;
+        tbody.innerHTML = '';
+        
+        // Filter out products with 0 stock
+        const availableProducts = state.inventorySummary.filter(s => s.Total_Stok > 0);
+        
+        if(invoiceItems.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-12">
+                <div class="flex flex-col items-center gap-3">
+                    <i data-lucide="package-open" class="w-16 h-16 text-slate-200 dark:text-slate-700" style="stroke-width: 1;"></i>
+                    <p class="text-slate-400 text-sm">Belum ada item ditambahkan</p>
+                </div>
+            </td></tr>`;
+            lucide.createIcons();
+            return;
+        }
+
+        invoiceItems.forEach((item, index) => {
+            let optionsHTML = '<option value="">-- Pilih Produk --</option>';
+            availableProducts.forEach(s => {
+                const selected = item.ID_Produk === s.ID_Produk ? 'selected' : '';
+                optionsHTML += `<option value="${s.ID_Produk}" ${selected}>${s.Nama_Produk} (Stok: ${s.Total_Stok})</option>`;
+            });
+            
+            // Re-check max qty if product selected
+            let maxQty = 9999;
+            if(item.ID_Produk) {
+                const s = availableProducts.find(x => x.ID_Produk === item.ID_Produk);
+                if(s) maxQty = s.Total_Stok;
+            }
+
+            const subtotal = item.Qty * item.Harga_Jual_Aktual;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td class="px-4 py-2">
+                        <select class="w-full px-3 py-1.5 bg-transparent border border-slate-200 dark:border-slate-600 rounded focus:ring-2 focus:ring-slate-900 outline-none text-sm" onchange="updateInvoiceItem(${index}, 'ID_Produk', this.value)" required>
+                            ${optionsHTML}
+                        </select>
+                    </td>
+                    <td class="px-4 py-2">
+                        <input type="number" class="w-full px-3 py-1.5 bg-transparent border border-slate-200 dark:border-slate-600 rounded focus:ring-2 focus:ring-slate-900 outline-none text-sm" value="${item.Qty}" min="1" max="${maxQty}" onchange="updateInvoiceItem(${index}, 'Qty', this.value)" required>
+                    </td>
+                    <td class="px-4 py-2">
+                        <input type="number" class="w-full px-3 py-1.5 bg-transparent border border-slate-200 dark:border-slate-600 rounded focus:ring-2 focus:ring-slate-900 outline-none text-sm" value="${item.Harga_Jual_Aktual}" min="0" onchange="updateInvoiceItem(${index}, 'Harga_Jual_Aktual', this.value)" required>
+                    </td>
+                    <td class="px-4 py-2 font-medium text-slate-800 dark:text-slate-100">
+                        Rp ${subtotal.toLocaleString('id-ID')}
+                    </td>
+                    <td class="px-4 py-2 text-right">
+                        <button type="button" class="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" onclick="removeInvoiceItem(${index})">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        lucide.createIcons();
+    }
+
+    function onMarketplaceChange() {
+        const marketplace = document.getElementById('inv_marketplace').value;
+        const selectToko = document.getElementById('inv_toko');
+        
+        selectToko.innerHTML = '<option value="">-- Pilih --</option>';
+        
+        if (marketplace && marketplace !== 'Offline') {
+            selectToko.disabled = false;
+            selectToko.required = true;
+            
+            if(state.toko) {
+                const listToko = state.toko.filter(t => t.Marketplace === marketplace);
+                listToko.forEach(t => {
+                    selectToko.innerHTML += `<option value="${t.Nama_Toko}">${t.Nama_Toko}</option>`;
+                });
+            }
+        } else {
+            selectToko.disabled = true;
+            selectToko.required = false;
+        }
+        
+        calculateInvoice();
+    }
+
+    function calculateInvoice() {
+        let totalOmset = 0;
+        let feeOngkir = 0;
+        let feePromo = 0;
+
+        const marketplace = document.getElementById('inv_marketplace').value;
+        const namaToko = document.getElementById('inv_toko').value;
+        
+        let tokoConfig = null;
+        if (marketplace && marketplace !== 'Offline' && namaToko && state.toko) {
+            tokoConfig = state.toko.find(t => t.Marketplace === marketplace && t.Nama_Toko === namaToko);
+        }
+
+        invoiceItems.forEach(item => {
+            const subtotal = item.Qty * item.Harga_Jual_Aktual;
+            totalOmset += subtotal;
+            
+            if (tokoConfig) {
+                let baseOngkirItem = item.Harga_Jual_Aktual * (parseFloat(tokoConfig.Fee_GratisOngkir_Pct) || 0);
+                let actualOngkirItem = Math.min(baseOngkirItem, parseFloat(tokoConfig.Max_GratisOngkir) || 0);
+                feeOngkir += (actualOngkirItem * item.Qty);
+                
+                let basePromoItem = item.Harga_Jual_Aktual * (parseFloat(tokoConfig.Fee_Promo_Pct) || 0);
+                let actualPromoItem = Math.min(basePromoItem, parseFloat(tokoConfig.Max_Promo) || 0);
+                feePromo += (actualPromoItem * item.Qty);
+            }
+        });
+        
+        document.getElementById('inv_summary_omset').textContent = `Rp ${totalOmset.toLocaleString('id-ID')}`;
+        
+        let feeAdmin = 0;
+        const feesContainer = document.getElementById('inv_online_fees_container');
+        
+        if (tokoConfig) {
+            feesContainer.classList.remove('hidden');
+            
+            let feeEcom = totalOmset * (parseFloat(tokoConfig.Fee_Ecommerce_Pct) || 0);
+            
+            document.getElementById('inv_summary_fee_ecommerce').textContent = `- Rp ${feeEcom.toLocaleString('id-ID')}`;
+            document.getElementById('inv_summary_fee_ongkir').textContent = `- Rp ${feeOngkir.toLocaleString('id-ID')}`;
+            document.getElementById('inv_summary_fee_promo_extra').textContent = `- Rp ${feePromo.toLocaleString('id-ID')}`;
+            
+            feeAdmin = feeEcom + feeOngkir + feePromo;
+        } else {
+            feesContainer.classList.add('hidden');
+        }
+        
+        const jumlahResi = parseFloat(document.getElementById('inv_jumlah_resi').value) || 0;
+        const tarifResiSetting = state.settings && state.settings['Tarif_Pelayanan_Per_Resi'] ? state.settings['Tarif_Pelayanan_Per_Resi'] : {nilai: 1000, tipe: 'Nominal'};
+        const biayaPelayanan = jumlahResi * parseFloat(tarifResiSetting.nilai);
+        document.getElementById('inv_biaya_pelayanan').value = biayaPelayanan;
+        
+        const biayaLain = parseFloat(document.getElementById('inv_biaya_lain').value) || 0;
+        
+        const penerimaanBersih = totalOmset - feeAdmin - biayaPelayanan - biayaLain;
+        document.getElementById('inv_summary_laba').textContent = `Rp ${penerimaanBersih.toLocaleString('id-ID')}`;
+        
+        return { totalOmset, feeAdmin, biayaPelayanan, biayaLain };
+    }
+
+    function saveInvoice(e) {
+        e.preventDefault();
+        
+        if(invoiceItems.length === 0) {
+            alert('Tambahkan minimal 1 produk!');
+            return;
+        }
+        
+        const invalidItem = invoiceItems.find(x => !x.ID_Produk);
+        if(invalidItem) {
+            alert('Pastikan semua baris pesanan telah memilih produk!');
+            return;
+        }
+
+        const btn = document.getElementById('btnSaveInvoice');
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Memproses...';
+        lucide.createIcons();
+        
+        const calc = calculateInvoice();
+        
+        const invoiceData = {
+            header: {
+                Tanggal: document.getElementById('inv_tanggal').value,
+                Shift: document.getElementById('inv_shift').value,
+                Tipe: document.getElementById('inv_marketplace').value === 'Offline' ? 'Offline' : 'Online',
+                Marketplace: document.getElementById('inv_marketplace').value,
+                Nama_Toko: document.getElementById('inv_toko').value,
+                Total_Fee_Admin: calc.feeAdmin,
+                Biaya_Pelayanan: calc.biayaPelayanan,
+                Biaya_Lain: calc.biayaLain
+            },
+            details: invoiceItems
+        };
+
+        const saveProcess = () => {
+            google.script.run.withSuccessHandler((noInvoice) => {
+                alert('Transaksi Berhasil Disimpan: ' + noInvoice);
+                window.editingNoInvoice = null;
+                loadInitialData();
+                document.getElementById('formInvoice').reset();
+                invoiceItems = [];
+                renderInvoiceItems();
+                calculateInvoice();
+                
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5"></i> Proses Transaksi';
+                lucide.createIcons();
+            }).withFailureHandler((err) => {
+                alert('Terjadi Kesalahan: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5"></i> Proses Transaksi';
+                lucide.createIcons();
+            }).saveInvoice(invoiceData);
+        };
+
+        if (window.editingNoInvoice) {
+            google.script.run.withSuccessHandler(() => {
+                saveProcess();
+            }).deleteInvoice(window.editingNoInvoice);
+        } else {
+            saveProcess();
+        }
+    }
+
+    // --- RIWAYAT PENJUALAN LOGIC ---
+    function applyHistoryFilter() {
+        if (!state.invoices) return;
+        
+        const start = document.getElementById('hist_filter_start').value;
+        const end = document.getElementById('hist_filter_end').value;
+        const query = document.getElementById('hist_filter_search').value.toLowerCase().trim();
+        
+        let filtered = state.invoices.filter(inv => {
+            let matchDate = true;
+            if (start && inv.Tanggal < start) matchDate = false;
+            if (end && inv.Tanggal > end) matchDate = false;
+            
+            let matchQuery = true;
+            if (query) {
+                const text = `${inv.No_Invoice} ${inv.Marketplace} ${inv.Nama_Toko}`.toLowerCase();
+                matchQuery = text.includes(query);
+            }
+            
+            return matchDate && matchQuery;
+        });
+        
+        // Sorting
+        filtered.sort((a, b) => {
+            let valA = a[historyState.sortCol] || '';
+            let valB = b[historyState.sortCol] || '';
+            
+            if (historyState.sortCol === 'Total_Omset' || historyState.sortCol === 'Laba_Bersih') {
+                valA = parseFloat(valA) || 0;
+                valB = parseFloat(valB) || 0;
+            }
+            
+            if (valA < valB) return historyState.sortAsc ? -1 : 1;
+            if (valA > valB) return historyState.sortAsc ? 1 : -1;
+            return 0;
+        });
+        
+        historyState.filtered = filtered;
+        historyState.currentPage = 1;
+        
+        updateHistorySummaryCards();
+        renderHistory();
+    }
+
+    function resetHistoryFilter() {
+        document.getElementById('hist_filter_start').value = '';
+        document.getElementById('hist_filter_end').value = '';
+        document.getElementById('hist_filter_search').value = '';
+        historyState.sortCol = 'Tanggal';
+        historyState.sortAsc = false;
+        
+        const icons = ['Tanggal', 'No_Invoice', 'Marketplace', 'Nama_Toko', 'Total_Omset', 'Laba_Bersih', 'Status_Dana'];
+        icons.forEach(id => {
+            const el = document.getElementById('sort_' + id);
+            if (el) el.setAttribute('data-lucide', id === 'Tanggal' ? 'arrow-down' : 'minus');
+            if (el) el.className = id === 'Tanggal' ? 'w-4 h-4 text-slate-900 dark:text-slate-100' : 'w-4 h-4 text-transparent';
+        });
+        lucide.createIcons();
+        
+        applyHistoryFilter();
+    }
+
+    function sortHistory(col) {
+        if (historyState.sortCol === col) {
+            historyState.sortAsc = !historyState.sortAsc;
+        } else {
+            historyState.sortCol = col;
+            historyState.sortAsc = true;
+        }
+        
+        const icons = ['Tanggal', 'No_Invoice', 'Marketplace', 'Nama_Toko', 'Total_Omset', 'Laba_Bersih', 'Status_Dana'];
+        icons.forEach(id => {
+            const el = document.getElementById('sort_' + id);
+            if (el) {
+                if (id === col) {
+                    el.setAttribute('data-lucide', historyState.sortAsc ? 'arrow-up' : 'arrow-down');
+                    el.className = 'w-4 h-4 text-slate-900 dark:text-slate-100';
+                } else {
+                    el.setAttribute('data-lucide', 'minus');
+                    el.className = 'w-4 h-4 text-transparent';
+                }
+            }
+        });
+        lucide.createIcons();
+        
+        applyHistoryFilter();
+    }
+
+    function changePageHistory(delta) {
+        const totalPages = Math.ceil(historyState.filtered.length / historyState.itemsPerPage) || 1;
+        historyState.currentPage += delta;
+        if (historyState.currentPage < 1) historyState.currentPage = 1;
+        if (historyState.currentPage > totalPages) historyState.currentPage = totalPages;
+        renderHistory();
+    }
+
+    function updateHistorySummaryCards() {
+        let totalOmset = 0;
+        let totalBersih = 0;
+        let totalPotongan = 0;
+        
+        historyState.filtered.forEach(inv => {
+            totalOmset += (parseFloat(inv.Total_Omset) || 0);
+            totalBersih += (parseFloat(inv.Laba_Bersih) || 0);
+            totalPotongan += (parseFloat(inv.Total_Fee_Admin) || 0) + (parseFloat(inv.Biaya_Pelayanan) || 0) + (parseFloat(inv.Biaya_Lain) || 0);
+        });
+        
+        const elInvoice = document.getElementById('hist_total_invoice');
+        if (elInvoice) elInvoice.textContent = historyState.filtered.length;
+        
+        const elOmset = document.getElementById('hist_total_omset');
+        if (elOmset) elOmset.textContent = `Rp ${totalOmset.toLocaleString('id-ID')}`;
+        
+        const elBersih = document.getElementById('hist_total_bersih');
+        if (elBersih) elBersih.textContent = `Rp ${totalBersih.toLocaleString('id-ID')}`;
+        
+        const elPotong = document.getElementById('hist_total_potongan');
+        if (elPotong) elPotong.textContent = `Rp ${totalPotongan.toLocaleString('id-ID')}`;
+    }
+
+    function renderHistory() {
+        const tbody = document.getElementById('tbody-history');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        const startIdx = (historyState.currentPage - 1) * historyState.itemsPerPage;
+        const endIdx = startIdx + historyState.itemsPerPage;
+        const slicedData = historyState.filtered.slice(startIdx, endIdx);
+        
+        slicedData.forEach(inv => {
+            const tr = document.createElement('tr');
+            const statusBadge = inv.Status_Dana === 'Sudah' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700';
+            
+            tr.innerHTML = `
+                <td class="px-4 py-3">${inv.Tanggal}</td>
+                <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${inv.No_Invoice}</td>
+                <td class="px-4 py-3">${inv.Marketplace}</td>
+                <td class="px-4 py-3">${inv.Nama_Toko}</td>
+                <td class="px-4 py-3">Rp ${(parseFloat(inv.Total_Omset) || 0).toLocaleString('id-ID')}</td>
+                <td class="px-4 py-3 text-blue-600 font-medium">Rp ${(parseFloat(inv.Laba_Bersih) || 0).toLocaleString('id-ID')}</td>
+                <td class="px-4 py-3"><span class="px-2.5 py-1 rounded-lg text-xs font-medium ${statusBadge}">${inv.Status_Dana}</span></td>
+                <td class="px-4 py-3">
+                    <div class="flex gap-2">
+                        <button class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors" title="Lihat Detail" onclick="viewInvoiceDetail('${inv.No_Invoice}')">
+                            <i data-lucide="eye" class="w-4 h-4"></i>
+                        </button>
+                        <button class="p-1.5 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors" title="Edit Transaksi" onclick="editInvoice('${inv.No_Invoice}')">
+                            <i data-lucide="edit" class="w-4 h-4"></i>
+                        </button>
+                        <button class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Hapus Transaksi" onclick="deleteInvoiceUI('${inv.No_Invoice}')">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                        <button class="p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors" title="Cetak Ulang" onclick="printInvoiceFromHistory('${inv.No_Invoice}')">
+                            <i data-lucide="printer" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        const totalPages = Math.ceil(historyState.filtered.length / historyState.itemsPerPage) || 1;
+        const btnPrev = document.getElementById('hist_btn_prev');
+        const btnNext = document.getElementById('hist_btn_next');
+        const pageNum = document.getElementById('hist_page_number');
+        
+        if (btnPrev) {
+            btnPrev.disabled = historyState.currentPage === 1;
+            if(btnPrev.disabled) btnPrev.classList.add('opacity-50'); else btnPrev.classList.remove('opacity-50');
+        }
+        if (btnNext) {
+            btnNext.disabled = historyState.currentPage === totalPages;
+            if(btnNext.disabled) btnNext.classList.add('opacity-50'); else btnNext.classList.remove('opacity-50');
+        }
+        if (pageNum) pageNum.textContent = historyState.currentPage;
+        
+        const totalRows = historyState.filtered.length;
+        const displayStart = totalRows === 0 ? 0 : startIdx + 1;
+        const displayEnd = Math.min(startIdx + historyState.itemsPerPage, totalRows);
+        const info = document.getElementById('hist_pagination_info');
+        if (info) info.textContent = `Menampilkan ${displayStart}-${displayEnd} dari ${totalRows} baris`;
+        
+        lucide.createIcons();
+    }
+
+    function editInvoice(noInvoice) {
+        if(!confirm('Untuk mengedit, Anda akan diarahkan ke form invoice. Data lama akan dihapus saat Anda menyimpan revisi. Lanjutkan?')) return;
+        
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(details => {
+                showLoading(false);
+                const header = state.invoices.find(h => h.No_Invoice === noInvoice);
+                if(!header) return;
+                
+                // Switch to Invoice view
+                showPage('invoice');
+                
+                // Fill header
+                document.getElementById('inv_tanggal').value = header.Tanggal;
+                document.getElementById('inv_marketplace').value = header.Marketplace;
+                onMarketplaceChange(); // populate toko
+                setTimeout(() => {
+                    document.getElementById('inv_toko').value = header.Nama_Toko;
+                    document.getElementById('inv_shift').value = header.Shift || '09:00';
+                    document.getElementById('inv_jumlah_resi').value = header.Biaya_Pelayanan / 1250; // assuming default fee
+                    document.getElementById('inv_biaya_lain').value = header.Biaya_Lain;
+                    
+                    // Fill items
+                    invoiceItems = details.map(d => ({
+                        ID_Produk: d.ID_Produk,
+                        Qty: d.Qty,
+                        Harga_Jual_Aktual: d.Harga_Jual_Aktual
+                    }));
+                    
+                    // Mark as editing
+                    window.editingNoInvoice = noInvoice;
+                    
+                    renderInvoiceItems();
+                    calculateInvoice();
+                }, 500);
+            })
+            .getInvoiceDetails(noInvoice);
+    }
+
+    function viewInvoiceDetail(noInvoice) {
+        document.getElementById('det_no_invoice').textContent = noInvoice;
+        const tbody = document.getElementById('tbody-invoice-detail');
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4">Loading...</td></tr>';
+        
+        openModal('modalInvoiceDetail');
+        
+        google.script.run
+            .withSuccessHandler(details => {
+                tbody.innerHTML = '';
+                if(!details || details.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-slate-500">Detail tidak ditemukan.</td></tr>';
+                    return;
+                }
+                details.forEach(d => {
+                    const p = state.produk.find(x => x.ID_Produk === d.ID_Produk);
+                    const nama = p ? p.Nama_Produk : d.ID_Produk;
+                    tbody.innerHTML += `
+                        <tr class="border-b border-slate-50 dark:border-slate-700/50">
+                            <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${nama}</td>
+                            <td class="px-4 py-3">${d.Qty}</td>
+                            <td class="px-4 py-3">Rp ${(parseFloat(d.Harga_Jual_Aktual) || 0).toLocaleString('id-ID')}</td>
+                            <td class="px-4 py-3 text-slate-500 text-xs">HPP: Rp ${(parseFloat(d.Total_HPP_FIFO) || 0).toLocaleString('id-ID')}</td>
+                        </tr>
+                    `;
+                });
+            })
+            .getInvoiceDetails(noInvoice);
+    }
+
+    function deleteInvoiceUI(noInvoice) {
+        if(!confirm('Hapus transaksi ' + noInvoice + '? Stok akan dikembalikan. Tindakan ini tidak dapat dibatalkan.')) return;
+        
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(res => {
+                showLoading(false);
+                if(res.success) {
+                    showToast('Transaksi berhasil dihapus', 'success');
+                    loadInitialData();
+                } else {
+                    showToast('Gagal menghapus transaksi', 'error');
+                }
+            })
+            .deleteInvoice(noInvoice);
+    }
+
+    function printInvoiceFromHistory(noInvoice) {
+        alert("Fungsi cetak ulang siap diintegrasikan dengan driver printer.\\nNo Invoice: " + noInvoice);
+    }
+
+    // --- FILTER BARS ---
+    function filterInventorySummary() {
+        const query = (document.getElementById('filter-inventory-summary').value || '').toLowerCase().trim();
+        const tbody = document.getElementById('tbody-inventory-summary');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        let filtered = state.inventorySummary;
+        if (query) {
+            filtered = filtered.filter(s => {
+                const text = `${s.ID_Produk} ${s.Nama_Produk}`.toLowerCase();
+                return text.includes(query);
+            });
+        }
+        
+        const startIdx = (inventorySummaryState.currentPage - 1) * inventorySummaryState.itemsPerPage;
+        const endIdx = startIdx + inventorySummaryState.itemsPerPage;
+        const slicedData = filtered.slice(startIdx, endIdx);
+        
+        if (slicedData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">Tidak ada data ditemukan</td></tr>';
+        } else {
+            slicedData.forEach(s => {
+                const p = state.produk.find(x => x.ID_Produk === s.ID_Produk);
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="px-4 py-3">${s.ID_Produk}</td>
+                        <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${s.Nama_Produk}</td>
+                        <td class="px-4 py-3">Rp ${p ? p.Harga_Jual_Default.toLocaleString('id-ID') : 0}</td>
+                        <td class="px-4 py-3"><span class="px-2.5 py-1 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-lg text-xs font-bold">${s.Total_Stok}</span></td>
+                        <td class="px-4 py-3">Rp ${s.Nilai_Aset.toLocaleString('id-ID')}</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        // Update Pagination
+        const totalRows = filtered.length;
+        const totalPages = Math.ceil(totalRows / inventorySummaryState.itemsPerPage) || 1;
+        const displayStart = totalRows === 0 ? 0 : startIdx + 1;
+        const displayEnd = Math.min(endIdx, totalRows);
+        
+        const paginationContainer = document.getElementById('pagination-inventory-summary');
+        if(paginationContainer) {
+            paginationContainer.innerHTML = `
+                <span>Menampilkan ${displayStart}-${displayEnd} dari ${totalRows} baris</span>
+                <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700">
+                    <button onclick="changePageInventorySummary(-1)" ${inventorySummaryState.currentPage === 1 ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700 transition-colors rounded-l-lg disabled:opacity-50">Previous</button>
+                    <button disabled class="px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800/50">${inventorySummaryState.currentPage}</button>
+                    <button onclick="changePageInventorySummary(1)" ${inventorySummaryState.currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-l border-slate-200 dark:border-slate-700 transition-colors rounded-r-lg disabled:opacity-50">Next</button>
+                </div>
+            `;
+        }
+        lucide.createIcons();
+    }
+
+    function filterInboundHistory() {
+        const query = (document.getElementById('filter-inbound-history').value || '').toLowerCase().trim();
+        const tbody = document.getElementById('tbody-inbound');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        let filtered = state.stok;
+        if (query) {
+            filtered = filtered.filter(s => {
+                const p = state.produk.find(x => x.ID_Produk === s.ID_Produk);
+                const namaProduk = p ? p.Nama_Produk : '';
+                const text = `${s.ID_Batch} ${s.ID_Produk} ${namaProduk} ${s.Nama_Supplier || ''} ${s.No_Invoice_Supplier || ''}`.toLowerCase();
+                return text.includes(query);
+            });
+        }
+        
+        const startIdx = (inboundStokState.currentPage - 1) * inboundStokState.itemsPerPage;
+        const endIdx = startIdx + inboundStokState.itemsPerPage;
+        const slicedData = filtered.slice(startIdx, endIdx);
+        
+        if (slicedData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="11" class="px-4 py-6 text-center text-slate-400">Tidak ada data ditemukan</td></tr>';
+        } else {
+            slicedData.forEach(s => {
+                const p = state.produk.find(x => x.ID_Produk === s.ID_Produk);
+                const namaProduk = p ? p.Nama_Produk : 'Unknown';
+                let aksiHTML = '';
+                if (s.Qty_Masuk === s.Qty_Sisa) {
+                    aksiHTML = `
+                        <div class="flex gap-2">
+                            <button class="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" onclick="deleteInbound('${s.ID_Batch}')">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    `;
+                }
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="px-4 py-3">${s.Tanggal}</td>
+                        <td class="px-4 py-3">${s.ID_Batch}</td>
+                        <td class="px-4 py-3">${s.Nama_Supplier || '-'}</td>
+                        <td class="px-4 py-3">${s.No_Invoice_Supplier || '-'}</td>
+                        <td class="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">${namaProduk}</td>
+                        <td class="px-4 py-3">${s.Qty_Masuk}</td>
+                        <td class="px-4 py-3"><span class="font-bold text-slate-900 dark:text-slate-100">${s.Qty_Sisa}</span></td>
+                        <td class="px-4 py-3">Rp ${(s.Harga_Beli_Kotor || 0).toLocaleString('id-ID')}</td>
+                        <td class="px-4 py-3">${(s.Diskon_Supplier || 0)}%</td>
+                        <td class="px-4 py-3 font-medium">Rp ${(s.Harga_Beli_Bersih || 0).toLocaleString('id-ID')}</td>
+                        <td class="px-4 py-3">${aksiHTML}</td>
+                    </tr>
+                `;
+            });
+        }
+        
+        // Update Pagination
+        const totalRows = filtered.length;
+        const totalPages = Math.ceil(totalRows / inboundStokState.itemsPerPage) || 1;
+        const displayStart = totalRows === 0 ? 0 : startIdx + 1;
+        const displayEnd = Math.min(endIdx, totalRows);
+        
+        const paginationContainer = document.getElementById('pagination-inbound-stok');
+        if(paginationContainer) {
+            paginationContainer.innerHTML = `
+                <span>Menampilkan ${displayStart}-${displayEnd} dari ${totalRows} baris</span>
+                <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700">
+                    <button onclick="changePageInboundStok(-1)" ${inboundStokState.currentPage === 1 ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-r border-slate-200 dark:border-slate-700 transition-colors rounded-l-lg disabled:opacity-50">Previous</button>
+                    <button disabled class="px-3 py-1.5 text-sm font-medium text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-800/50">${inboundStokState.currentPage}</button>
+                    <button onclick="changePageInboundStok(1)" ${inboundStokState.currentPage === totalPages ? 'disabled' : ''} class="px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 border-l border-slate-200 dark:border-slate-700 transition-colors rounded-r-lg disabled:opacity-50">Next</button>
+                </div>
+            `;
+        }
+        lucide.createIcons();
+    }
+    // --- MODAL HELPERS ---
+    function openModal(id) {
+        const modal = document.getElementById(id);
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        setTimeout(() => {
+            const overlay = modal.querySelector('.modal-overlay');
+            const content = modal.querySelector('.modal-content');
+            if(overlay) overlay.classList.replace('opacity-0', 'opacity-100');
+            if(content) {
+                content.classList.replace('scale-95', 'scale-100');
+                content.classList.replace('opacity-0', 'opacity-100');
+            }
+        }, 10);
+        if(typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    function closeModal(id) {
+        const modal = document.getElementById(id);
+        if (!modal) return;
+        const overlay = modal.querySelector('.modal-overlay');
+        const content = modal.querySelector('.modal-content');
+        if(overlay) overlay.classList.replace('opacity-100', 'opacity-0');
+        if(content) {
+            content.classList.replace('scale-100', 'scale-95');
+            content.classList.replace('opacity-100', 'opacity-0');
+        }
+        setTimeout(() => {
+            modal.classList.add('hidden');
+        }, 200);
+    }
+
+    // Modal Global Listener for Close
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('[data-bs-dismiss="modal"]')) {
+            const modal = e.target.closest('.fixed.inset-0');
+            if (modal) closeModal(modal.id);
+        }
+    });
+
+    // --- FINANCE MODAL ACTIONS ---
+    function openModalTambahModal() {
+        document.getElementById('formTambahModal').reset();
+        document.getElementById('modal_tanggal').value = new Date().toISOString().split('T')[0];
+        openModal('modalTambahModal');
+    }
+
+    function openModalPengeluaran() {
+        document.getElementById('formPengeluaran').reset();
+        document.getElementById('peng_tanggal').value = new Date().toISOString().split('T')[0];
+        openModal('modalPengeluaran');
+    }
+
+    function saveTambahModal(e) {
+        e.preventDefault();
+        const data = {
+            Tanggal: document.getElementById('modal_tanggal').value,
+            Nominal: document.getElementById('modal_nominal').value,
+            Keterangan: document.getElementById('modal_keterangan').value,
+            Rekening: document.getElementById('modal_rekening').value
+        };
+        
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(res => {
+                showLoading(false);
+                if(res.success) {
+                    showToast('Modal berhasil ditambahkan', 'success');
+                    closeModal('modalTambahModal');
+                    refreshBankBalances(); // Refresh cards immediately
+                    loadInitialData();
+                } else {
+                    showToast(res.message || 'Gagal menyimpan', 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                showLoading(false);
+                showToast('Error: ' + err.message, 'error');
+            })
+            .saveTambahModal(data);
+    }
+
+    function savePengeluaran(e) {
+        e.preventDefault();
+        const data = {
+            Tanggal: document.getElementById('peng_tanggal').value,
+            Kategori: document.getElementById('peng_kategori').value,
+            Nominal: document.getElementById('peng_nominal').value,
+            Keterangan: document.getElementById('peng_keterangan').value,
+            Rekening: document.getElementById('peng_rekening').value
+        };
+        
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(res => {
+                showLoading(false);
+                if(res.success) {
+                    showToast('Pengeluaran berhasil dicatat', 'success');
+                    closeModal('modalPengeluaran');
+                    refreshBankBalances(); // Refresh cards immediately
+                    loadInitialData();
+                } else {
+                    showToast(res.message || 'Gagal menyimpan', 'error');
+                }
+            })
+            .withFailureHandler(err => {
+                showLoading(false);
+                showToast('Error: ' + err.message, 'error');
+            })
+            .savePengeluaran(data);
+    }
+
+    function withdrawDana(noInvoice) {
+        const rekSelect = document.getElementById('rek_' + noInvoice);
+        const rekening = rekSelect ? rekSelect.value : 'BCA';
+        if(confirm('Cairkan dana invoice ' + noInvoice + ' ke rekening ' + rekening + '?')) {
+            showLoading(true);
+            google.script.run
+                .withSuccessHandler(res => {
+                    if(res) {
+                        showToast('Withdraw berhasil', 'success');
+                        refreshBankBalances(); // Refresh cards immediately
+                        loadInitialData();
+                    } else {
+                        showLoading(false);
+                        showToast('Gagal memproses withdraw', 'error');
+                    }
+                })
+                .withFailureHandler(err => {
+                    showLoading(false);
+                    showToast('Error: ' + err.message, 'error');
+                })
+                .processWithdraw(noInvoice, rekening);
+        }
+    }
+
+    // --- MASTER SETTINGS ACTIONS ---
+    function openModalMasterToko(id) {
+        document.getElementById('formMasterToko').reset();
+        document.getElementById('toko_id').value = '';
+        if(id) {
+            const t = state.toko.find(x => x.ID_Toko === id);
+            if(t) {
+                document.getElementById('toko_id').value = t.ID_Toko;
+                document.getElementById('toko_marketplace').value = t.Marketplace;
+                document.getElementById('toko_nama').value = t.Nama_Toko;
+                document.getElementById('toko_fee_ecom').value = t.Fee_Ecommerce_Pct;
+                document.getElementById('toko_fee_ongkir').value = t.Fee_GratisOngkir_Pct;
+                document.getElementById('toko_max_ongkir').value = t.Max_GratisOngkir;
+                document.getElementById('toko_fee_promo').value = t.Fee_Promo_Pct;
+                document.getElementById('toko_max_promo').value = t.Max_Promo;
+            }
+        }
+        openModal('modalMasterToko');
+    }
+
+    function saveToko(e) {
+        e.preventDefault();
+        const data = {
+            ID_Toko: document.getElementById('toko_id').value,
+            Marketplace: document.getElementById('toko_marketplace').value,
+            Nama_Toko: document.getElementById('toko_nama').value,
+            Fee_Ecommerce_Pct: document.getElementById('toko_fee_ecom').value,
+            Fee_GratisOngkir_Pct: document.getElementById('toko_fee_ongkir').value,
+            Max_GratisOngkir: document.getElementById('toko_max_ongkir').value,
+            Fee_Promo_Pct: document.getElementById('toko_fee_promo').value,
+            Max_Promo: document.getElementById('toko_max_promo').value
+        };
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(() => {
+                showToast('Toko berhasil disimpan', 'success');
+                closeModal('modalMasterToko');
+                loadInitialData();
+            })
+            .saveMasterToko(data);
+    }
+
+    function deleteToko(id) {
+        if(confirm('Hapus toko ini?')) {
+            showLoading(true);
+            google.script.run
+                .withSuccessHandler(() => {
+                    showToast('Toko berhasil dihapus', 'success');
+                    loadInitialData();
+                })
+                .deleteMasterToko(id);
+        }
+    }
+
+    function openModalMasterProduk(id) {
+        document.getElementById('formMasterProduk').reset();
+        document.getElementById('prod_id').value = '';
+        if(id) {
+            const p = state.produk.find(x => x.ID_Produk === id);
+            if(p) {
+                document.getElementById('prod_id').value = p.ID_Produk;
+                document.getElementById('prod_nama').value = p.Nama_Produk;
+                document.getElementById('prod_harga').value = p.Harga_Jual_Default;
+            }
+        }
+        openModal('modalMasterProduk');
+    }
+
+    function saveProduk(e) {
+        e.preventDefault();
+        const data = {
+            ID_Produk: document.getElementById('prod_id').value,
+            Nama_Produk: document.getElementById('prod_nama').value,
+            Harga_Jual_Default: document.getElementById('prod_harga').value
+        };
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(() => {
+                showToast('Produk berhasil disimpan', 'success');
+                closeModal('modalMasterProduk');
+                loadInitialData();
+            })
+            .saveMasterProduk(data);
+    }
+
+    function deleteProduk(id) {
+        if(confirm('Hapus produk ini?')) {
+            showLoading(true);
+            google.script.run
+                .withSuccessHandler(() => {
+                    showToast('Produk berhasil dihapus', 'success');
+                    loadInitialData();
+                })
+                .deleteMasterProduk(id);
+        }
+    }
+
+    function openModalMasterUser() {
+        document.getElementById('formMasterUser').reset();
+        openModal('modalMasterUser');
+    }
+
+    function saveUser(e) {
+        e.preventDefault();
+        const data = {
+            Username: document.getElementById('user_username').value,
+            Password: document.getElementById('user_password').value,
+            Role: document.getElementById('user_role').value
+        };
+        showLoading(true);
+        google.script.run
+            .withSuccessHandler(() => {
+                showToast('User berhasil ditambahkan', 'success');
+                closeModal('modalMasterUser');
+                loadInitialData();
+            })
+            .withFailureHandler(err => {
+                showLoading(false);
+                alert('Gagal: ' + err.message);
+            })
+            .saveMasterUser(data);
+    }
+
+    function deleteUser(username) {
+        if(username === 'admin') return alert('Admin utama tidak bisa dihapus.');
+        if(confirm('Hapus user ' + username + '?')) {
+            showLoading(true);
+            google.script.run
+                .withSuccessHandler(() => {
+                    showToast('User berhasil dihapus', 'success');
+                    loadInitialData();
+                })
+                .deleteMasterUser(username);
+        }
+    }
+
+    function showToast(msg, type) {
+        // Basic toast using alert or implement a proper one if exists
+        console.log(`TOAST [${type}]: ${msg}`);
+        // If we have a toast container in Index.html, we can use it.
+        // For now, let's just use alert for errors and console for success if no toast logic.
+        if(type === 'error') alert(msg);
+    }
+
+    function showLoading(show) {
+        const loader = document.getElementById('loadingOverlay');
+        if(loader) {
+            if(show) loader.classList.remove('hidden');
+            else loader.classList.add('hidden');
+        }
+    }
+</script>
