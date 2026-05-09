@@ -1,0 +1,18 @@
+# Google Apps Script build artifacts
+*.log
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+*.swp
+
+# Sensitive files
+logo_base64.txt
+
+# Binary/lock files
+*.gscript
+desktop.ini
