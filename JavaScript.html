@@ -220,6 +220,19 @@
                     state.bukuKas = data.bukuKas || [];
                     state.users = data.users || [];
                     
+                    // ── MAGIC START: SET DEFAULT FILTER DASHBOARD (BULAN INI) ──
+                    const dateObj = new Date();
+                    const y = dateObj.getFullYear();
+                    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const todayStr = dateObj.toISOString().split('T')[0];
+                    const startOfMonth = `${y}-${m}-01`;
+
+                    const inputStart = document.getElementById('dash_filter_start');
+                    const inputEnd = document.getElementById('dash_filter_end');
+                    if (inputStart) inputStart.value = startOfMonth;
+                    if (inputEnd) inputEnd.value = todayStr;
+                    // ── MAGIC END ──────────────────────────────────────────────
+                    
                     renderMasterProduk();
                     renderMasterToko();
                     renderMasterUser();
@@ -233,10 +246,11 @@
                     renderStokKrisis();
                     renderReturSummaryCard();
                     applyHistoryFilter();
-                    updateDashboardMetrics();
+                    updateDashboardMetrics(); // <-- Sekarang fungsi ini akan membaca tanggal di atas
                     populateProductSelects();
                     populateSupplierSelects();
                     refreshBankBalances();
+                    
                     // Reset dan render outbound stok
                     outboundState.filtered = state.invoiceDetails || [];
                     renderOutboundStok();
@@ -1497,7 +1511,9 @@
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
         const start = `${y}-${m}-01`;
+        // Gunakan akhir bulan untuk end date
         const end = new Date(y, date.getMonth() + 1, 0).toISOString().split('T')[0];
+        
         document.getElementById('dash_filter_start').value = start;
         document.getElementById('dash_filter_end').value = end;
         applyDashboardFilter();
@@ -1511,63 +1527,100 @@
     }
 
     function applyDashboardFilter() {
-        updateDashboardMetrics(); // Panggil ulang kalkulasi saat tombol Terapkan diklik
+        updateDashboardMetrics(); // Panggil ulang kalkulasi
     }
 
-    // ── FUNGSI KALKULASI UTAMA (YANG SUDAH DI-UPGRADE) ──────────────────────
+    // ── FUNGSI KALKULASI UTAMA (BERDASARKAN KODE ASLIMU) ────────────────────
     function updateDashboardMetrics() {
         try {
-            const startVal = document.getElementById('dash_filter_start').value;
-            const endVal = document.getElementById('dash_filter_end').value;
+            // 1. Ambil nilai tanggal dari input HTML
+            const startInput = document.getElementById('dash_filter_start');
+            const endInput = document.getElementById('dash_filter_end');
+            const startVal = startInput ? startInput.value : '';
+            const endVal = endInput ? endInput.value : '';
 
-            // Helper untuk memfilter data berdasarkan rentang tanggal
+            // Helper untuk memfilter data (Jika tanggal kosong, kembalikan semua data)
             const filterByDate = (arr, dateField = 'Tanggal') => {
                 if (!arr) return [];
-                if (!startVal && !endVal) return arr;
+                if (!startVal && !endVal) return arr; // Grafiknya dijamin tidak hilang
                 return arr.filter(item => {
-                    const d = item[dateField];
+                    let d = item[dateField];
                     if (!d) return false;
+                    // Bersihkan format jam jika ada
+                    if(d.includes('T')) d = d.split('T')[0]; 
+
                     if (startVal && d < startVal) return false;
                     if (endVal && d > endVal) return false;
                     return true;
                 });
             };
 
-            // 1. Terapkan Filter Tanggal ke Data Mentah
-            const safeInvoices    = filterByDate(state.invoices || []);
-            const safePengeluaran = filterByDate(state.pengeluaran || []);
-            const safeRetur       = filterByDate(state.retur || []);
-            const safeInventory   = state.inventorySummary || []; // Aset selalu real-time, tidak difilter
-            const safeProduk      = state.produk || [];
+            // 2. Data Mentah dari State
+            const rawInvoices    = state.invoices       || [];
+            const rawDetails     = state.invoiceDetails || [];
+            const rawPengeluaran = state.pengeluaran    || [];
+            const rawRetur       = state.retur          || [];
+            const safeInventory  = state.inventorySummary || [];
+            const safeProduk     = state.produk         || [];
+            const today          = new Date().toISOString().split('T')[0];
+
+            // 3. Terapkan Filter
+            const safeInvoices    = filterByDate(rawInvoices);
+            const safePengeluaran = filterByDate(rawPengeluaran);
+            const safeRetur       = filterByDate(rawRetur);
             
-            // Filter invoiceDetails berdasarkan No_Invoice yang lolos filter tanggal
-            const validInvoiceNos = new Set(safeInvoices.map(i => i.No_Invoice));
-            const safeDetails     = (state.invoiceDetails || []).filter(d => validInvoiceNos.has(d.No_Invoice));
+            // Sinkronkan data detail (produk terjual) dengan invoice yang lolos filter
+            const validNos = new Set(safeInvoices.map(i => i.No_Invoice));
+            const safeDetails = rawDetails.filter(d => validNos.has(d.No_Invoice));
 
             const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
 
-            // ── Kalkulasi Metrik (Berdasarkan Rentang Waktu) ─────────────────
-            const filteredOmset      = safeInvoices.reduce((s, i) => s + (parseFloat(i.Total_Omset)  || 0), 0);
-            const filteredHPP        = safeInvoices.reduce((s, i) => s + (parseFloat(i.Total_HPP)    || 0), 0);
-            const filteredLabaBersih = safeInvoices.reduce((s, i) => s + (parseFloat(i.Laba_Bersih)  || 0), 0);
-            const filteredMarginKotor = filteredOmset - filteredHPP; // Omset - HPP
+            // ── Aggregate Filtered metrics ──────────────────────────────────
+            const allOmset      = safeInvoices.reduce((s, i) => s + (parseFloat(i.Total_Omset)  || 0), 0);
+            const allHPP        = safeInvoices.reduce((s, i) => s + (parseFloat(i.Total_HPP)    || 0), 0);
+            const allLabaBersih = safeInvoices.reduce((s, i) => s + (parseFloat(i.Laba_Bersih)  || 0), 0);
+            const allMarginKotor = allOmset - allHPP; // Omset - HPP
 
-            // ── Aset Gudang (Real-time / Statis) ──────────────────────────────
+            // ── Today (Tetap dipertahankan untuk legacy card) ───────────────
+            const todayInvoices   = rawInvoices.filter(i => {
+                 let d = i.Tanggal || '';
+                 if(d.includes('T')) d = d.split('T')[0];
+                 return d === today;
+            });
+            const todayOmset      = todayInvoices.reduce((s, i) => s + (parseFloat(i.Total_Omset) || 0), 0);
+            const todayLaba       = todayInvoices.reduce((s, i) => s + (parseFloat(i.Laba_Bersih) || 0), 0);
+            const todayTotalExp   = rawPengeluaran.filter(e => {
+                 let d = e.Tanggal || '';
+                 if(d.includes('T')) d = d.split('T')[0];
+                 return d === today;
+            }).reduce((s, e) => s + (parseFloat(e.Nominal) || 0), 0);
+
+            // ── Aset gudang (Aset tidak difilter tanggal) ───────────────────
             const totalValuasi = safeInventory.reduce((s, i) =>
                 s + (parseFloat(i.Nilai_Aset) || parseFloat(i.Total_Nilai_Aset) || 0), 0);
 
-            // ── Retur ─────────────────────────────────────────────────────────
-            const totalReturItems = safeRetur.reduce((s, r) => s + (parseFloat(r.Qty_Retur) || parseFloat(r.Qty) || 1), 0);
+            // ── Retur ───────────────────────────────────────────────────────
+            const totalReturItems = safeRetur.reduce((s, r) => s + (parseFloat(r.Qty_Retur) || 1), 0);
 
-            // ── Mengisi Kartu Dashboard ───────────────────────────────────────
-            set('dash-omset',          filteredOmset.toLocaleString('id-ID'));
-            set('dash-laba-kotor',     filteredMarginKotor.toLocaleString('id-ID'));
-            set('dash-laba-bersih',    filteredLabaBersih.toLocaleString('id-ID'));
+            // ── Fill dashboard cards ────────────────────────────────────────
+            set('dash-omset',          allOmset.toLocaleString('id-ID'));
+            set('dash-laba-kotor',     allMarginKotor.toLocaleString('id-ID'));
+            set('dash-laba-bersih',    allLabaBersih.toLocaleString('id-ID'));
             set('dash-total-invoice',  safeInvoices.length);
             set('dash-total-retur',    totalReturItems);
             set('dash-aset',           totalValuasi.toLocaleString('id-ID'));
 
-            // ── Top 5 Products (Berdasarkan Rentang Waktu) ────────────────────
+            // ── Legacy / other panel IDs ────────────────────────────────────
+            set('metric-omset-today',  `Rp ${todayOmset.toLocaleString('id-ID')}`);
+            set('metric-laba-today',   `Rp ${todayLaba.toLocaleString('id-ID')}`);
+            set('metric-exp-today',    `Rp ${todayTotalExp.toLocaleString('id-ID')}`);
+            set('metric-low-stock',    safeInventory.filter(s => (parseFloat(s.Total_Stok)||0) <= 5).length);
+            set('inv-total-valuasi',   `Rp ${totalValuasi.toLocaleString('id-ID')}`);
+            set('inv_summary_omset',   `Rp ${allOmset.toLocaleString('id-ID')}`);
+            set('inv_summary_laba',    `Rp ${allLabaBersih.toLocaleString('id-ID')}`);
+            set('hist_total_omset',    `Rp ${allOmset.toLocaleString('id-ID')}`);
+
+            // ── Top 5 Products ──────────────────────────────────────────────
             const qtySold = {};
             safeDetails.forEach(d => {
                 if (!d.ID_Produk) return;
@@ -1593,13 +1646,15 @@
                 }
             }
 
-            // ── Chart ─────────────────────────────────────────────────────────
-            renderDashboardChart(safeInvoices); // Mengirim data yang sudah difilter ke Chart
+            // ── Chart ───────────────────────────────────────────────────────
+            renderDashboardChart(safeInvoices);
 
         } catch(e) {
             console.error('Update Dashboard Metrics Error:', e);
         }
     }
+
+    let dashChartInstance = null;
 
     function renderDashboardChart(filteredInvoices) {
         try {
