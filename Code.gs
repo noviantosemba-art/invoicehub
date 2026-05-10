@@ -338,7 +338,7 @@ function getInitialData() {
     invoiceDetails: getAllInvoiceDetails(),
     retur: getReturLog(),
     pengeluaran: getPengeluaran(),
-    bukuKas: getBukuKas(),
+    bukuKas: getBukuKasWithIdx(),
     users: getMasterUser()
   };
 }
@@ -659,11 +659,31 @@ function savePengeluaran(pengeluaran) {
   let sheet = ss.getSheetByName('Pengeluaran');
   if(!sheet) {
       sheet = ss.insertSheet('Pengeluaran');
-      sheet.appendRow(['Tanggal', 'Kategori', 'Nominal', 'Keterangan']);
+      sheet.appendRow(['Tanggal', 'Kategori', 'Nominal', 'Keterangan', 'Rekening']);
   }
   const tgl = new Date(pengeluaran.Tanggal);
   const nominal = parseFloat(pengeluaran.Nominal) || 0;
-  sheet.appendRow([tgl, pengeluaran.Kategori, nominal, pengeluaran.Keterangan]);
+  const rekening = pengeluaran.Rekening || 'BCA';
+  
+  // Validasi: cek saldo bank cukup
+  const balances = getBalancesPerBank();
+  const saldoRekening = balances[rekening.toUpperCase()] || 0;
+  const saldoTotal = Object.values(balances).reduce((a, b) => a + b, 0);
+  
+  if (saldoTotal < nominal) {
+    return { success: false, message: `Saldo keseluruhan tidak cukup (Saldo: Rp ${saldoTotal.toLocaleString()}, Dibutuhkan: Rp ${nominal.toLocaleString()})` };
+  }
+  if (saldoRekening < nominal) {
+    return { success: false, message: `Saldo ${rekening} tidak cukup (Saldo: Rp ${saldoRekening.toLocaleString()}, Dibutuhkan: Rp ${nominal.toLocaleString()}). Silakan pilih rekening lain.` };
+  }
+  
+  // Cek apakah kolom Rekening sudah ada, jika belum tambahkan
+  const headers = sheet.getDataRange().getValues()[0];
+  if (headers.length < 5) {
+    sheet.getRange(1, 5).setValue('Rekening');
+  }
+  
+  sheet.appendRow([tgl, pengeluaran.Kategori, nominal, pengeluaran.Keterangan, rekening]);
   
   // HOOK: Append to Buku_Kas as Pengeluaran
   appendBukuKas(
@@ -672,16 +692,16 @@ function savePengeluaran(pengeluaran) {
     pengeluaran.Kategori + (pengeluaran.Keterangan ? ' - ' + pengeluaran.Keterangan : ''),
     0,
     nominal,
-    pengeluaran.Rekening || 'BCA'
+    rekening
   );
   
-  return true;
+  return { success: true };
 }
 
 function deletePengeluaranByData(peng) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName('Pengeluaran');
-  if(!sheet) return false;
+  if(!sheet) return { success: false, message: 'Sheet Pengeluaran tidak ditemukan.' };
   const data = sheet.getDataRange().getValues();
   
   for(let i=1; i<data.length; i++) {
@@ -699,10 +719,68 @@ function deletePengeluaranByData(peng) {
        parseFloat(data[i][2]) === parseFloat(peng.Nominal) && 
        String(data[i][3]) === String(peng.Keterangan)) {
       sheet.deleteRow(i+1);
-      return true;
+      
+      // JUGA hapus entri terkait dari Buku_Kas
+      _deleteBukuKasMatchingPengeluaran(peng);
+      
+      return { success: true };
     }
   }
-  return false;
+  return { success: false, message: 'Data pengeluaran tidak ditemukan.' };
+}
+
+// Helper: hapus entri Buku_Kas yang cocok dengan pengeluaran ini
+function _deleteBukuKasMatchingPengeluaran(peng) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('Buku_Kas');
+  if (!sheet) return;
+  const data = sheet.getDataRange().getValues();
+  
+  for (let i = data.length - 1; i >= 1; i--) {
+    let tglMatch = false;
+    let tglCell = data[i][0];
+    if (tglCell instanceof Date) {
+      let str = tglCell.getFullYear() + "-" + String(tglCell.getMonth()+1).padStart(2,'0') + "-" + String(tglCell.getDate()).padStart(2,'0');
+      if (str === peng.Tanggal) tglMatch = true;
+    } else {
+      if (String(tglCell) === String(peng.Tanggal)) tglMatch = true;
+    }
+    
+    const tipe = String(data[i][1] || '');
+    const keluar = parseFloat(data[i][4]) || 0;
+    
+    if (tglMatch && tipe === 'Pengeluaran' && keluar === parseFloat(peng.Nominal)) {
+      // Hapus baris ini dan rekalkuasi saldo sesudahnya
+      sheet.deleteRow(i + 1);
+      _recalculateBukuKasSaldo(sheet, i);
+      return;
+    }
+  }
+}
+
+// Rekalkuasi saldo berjalan Buku_Kas mulai dari baris startRow (1-indexed dari baris data)
+function _recalculateBukuKasSaldo(sheet, startDataIdx) {
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return;
+  
+  // Temukan saldo sebelum startDataIdx
+  let saldoBefore = 0;
+  const sheetStartRow = startDataIdx + 1; // Convert to 1-indexed sheet row
+  if (startDataIdx >= 1) {
+    // Baris sebelum yang dihapus
+    const prevRow = startDataIdx - 1; // baris data sebelumnya (0-indexed dari data array, 1-indexed dari baris sheet)
+    if (prevRow >= 1) {
+      saldoBefore = parseFloat(data[prevRow][5]) || 0;
+    }
+  }
+  
+  // Update semua baris dari startDataIdx sampai akhir
+  for (let i = startDataIdx; i < data.length; i++) {
+    const masuk = parseFloat(data[i][3]) || 0;
+    const keluar = parseFloat(data[i][4]) || 0;
+    saldoBefore = saldoBefore + masuk - keluar;
+    sheet.getRange(i + 1, 6).setValue(saldoBefore);
+  }
 }
 
 function getTopProducts(start, end) {
@@ -1147,3 +1225,192 @@ function updateSalesData(invoiceId, updatedData) {
   return { success: true, noInvoice: invoiceId };
 }
 
+// ============================================================
+// FUNGSI BARU: PENGELUARAN EDIT, WITHDRAW REVERT & UPDATE, BUKU KAS CRUD
+// ============================================================
+
+/**
+ * Update pengeluaran yang ada (hapus lama, buat baru).
+ * oldPeng: data lama {Tanggal, Kategori, Nominal, Keterangan, Rekening}
+ * newPeng: data baru {Tanggal, Kategori, Nominal, Keterangan, Rekening}
+ */
+function updatePengeluaran(oldPeng, newPeng) {
+  try {
+    // 1. Hapus pengeluaran & entri Buku_Kas lama
+    deletePengeluaranByData(oldPeng);
+    
+    // 2. Simpan pengeluaran baru (savePengeluaran sudah validasi saldo)
+    const result = savePengeluaran(newPeng);
+    if (!result.success) return result;
+    
+    return { success: true };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Mengembalikan invoice dari Status_Dana='Sudah' ke 'Belum' (revert withdraw).
+ * Juga menghapus entri Buku_Kas pencairan terkait.
+ */
+function revertWithdraw(noInvoice) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const headerSheet = ss.getSheetByName('Invoice_Header');
+    const data = headerSheet.getDataRange().getValues();
+    
+    let labaBersih = 0;
+    let withdrawDate = null;
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === noInvoice && data[i][12] === 'Sudah') {
+        labaBersih = parseFloat(data[i][11]) || 0;
+        withdrawDate = data[i][13]; // Tanggal_Withdraw
+        // Reset status
+        headerSheet.getRange(i + 1, 13).setValue('Belum');
+        headerSheet.getRange(i + 1, 14).setValue('');
+        break;
+      }
+    }
+    
+    // Hapus entri Buku_Kas pencairan ini
+    const kasSheet = ss.getSheetByName('Buku_Kas');
+    if (kasSheet && withdrawDate) {
+      const kasData = kasSheet.getDataRange().getValues();
+      for (let i = kasData.length - 1; i >= 1; i--) {
+        const tipe = String(kasData[i][1] || '');
+        const keterangan = String(kasData[i][2] || '');
+        if (tipe === 'Pencairan Penjualan' && keterangan.includes(noInvoice)) {
+          kasSheet.deleteRow(i + 1);
+          _recalculateBukuKasSaldo(kasSheet, i);
+          break;
+        }
+      }
+    }
+    
+    return { success: true };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Edit nominal Laba_Bersih pada Invoice_Header yang sudah cair.
+ * Juga update entri Buku_Kas terkait.
+ */
+function updateWithdrawLaba(noInvoice, nominalBaru) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const headerSheet = ss.getSheetByName('Invoice_Header');
+    const data = headerSheet.getDataRange().getValues();
+    
+    const nominal = parseFloat(nominalBaru) || 0;
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === noInvoice) {
+        // Update Laba_Bersih di kolom 12 (index 11)
+        headerSheet.getRange(i + 1, 12).setValue(nominal);
+        break;
+      }
+    }
+    
+    // Update entri Buku_Kas pencairan ini
+    const kasSheet = ss.getSheetByName('Buku_Kas');
+    if (kasSheet) {
+      const kasData = kasSheet.getDataRange().getValues();
+      for (let i = 1; i < kasData.length; i++) {
+        const tipe = String(kasData[i][1] || '');
+        const keterangan = String(kasData[i][2] || '');
+        if (tipe === 'Pencairan Penjualan' && keterangan.includes(noInvoice)) {
+          const oldMasuk = parseFloat(kasData[i][3]) || 0;
+          kasSheet.getRange(i + 1, 4).setValue(nominal);
+          // Rekalkuasi saldo dari baris ini
+          _recalculateBukuKasSaldo(kasSheet, i);
+          break;
+        }
+      }
+    }
+    
+    return { success: true };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Update satu entri di Buku_Kas berdasarkan index baris (row number sheet, 1-indexed, header=1).
+ */
+function updateBukuKasEntry(rowIdx, updatedEntry) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('Buku_Kas');
+    if (!sheet) return { success: false, message: 'Sheet Buku_Kas tidak ditemukan.' };
+    
+    const sheetRow = parseInt(rowIdx) + 1; // +1 karena header di baris 1
+    if (sheetRow < 2 || sheetRow > sheet.getLastRow()) {
+      return { success: false, message: 'Baris tidak valid.' };
+    }
+    
+    const tgl = new Date(updatedEntry.Tanggal);
+    const masuk = parseFloat(updatedEntry.Masuk_Debit) || 0;
+    const keluar = parseFloat(updatedEntry.Keluar_Kredit) || 0;
+    
+    sheet.getRange(sheetRow, 1, 1, 7).setValues([[
+      tgl,
+      updatedEntry.Tipe_Transaksi,
+      updatedEntry.Keterangan,
+      masuk,
+      keluar,
+      0, // Saldo akan direkalkuasi
+      updatedEntry.Rekening || ''
+    ]]);
+    
+    // Rekalkuasi saldo dari baris ini sampai akhir
+    _recalculateBukuKasSaldo(sheet, sheetRow - 1); // sheetRow-1 = data index (0-indexed from data array)
+    
+    return { success: true };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+/**
+ * Hapus satu entri di Buku_Kas berdasarkan index baris (row number sheet).
+ */
+function deleteBukuKasEntry(rowIdx) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName('Buku_Kas');
+    if (!sheet) return { success: false, message: 'Sheet Buku_Kas tidak ditemukan.' };
+    
+    const sheetRow = parseInt(rowIdx) + 1; // +1 karena header di baris 1
+    if (sheetRow < 2 || sheetRow > sheet.getLastRow()) {
+      return { success: false, message: 'Baris tidak valid.' };
+    }
+    
+    const dataIdxAfterDelete = sheetRow - 1 - 1; // index data setelah baris dihapus
+    sheet.deleteRow(sheetRow);
+    _recalculateBukuKasSaldo(sheet, dataIdxAfterDelete);
+    
+    return { success: true };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+// getInitialData juga perlu menyertakan rowIdx untuk Buku_Kas agar frontend bisa referensi baris
+function getBukuKasWithIdx() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('Buku_Kas');
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  
+  const headers = data[0];
+  const rows = data.slice(1);
+  return rows.map((row, idx) => {
+    let obj = serializeRow(headers, row);
+    obj._rowIdx = idx + 1; // 1-indexed dari data array (baris sheet = idx+2)
+    return obj;
+  });
+}

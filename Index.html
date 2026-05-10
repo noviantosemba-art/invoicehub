@@ -342,8 +342,9 @@
                 <!-- BOTTOM: Nav Tabs -->
                 <div class="border-b border-slate-200 dark:border-slate-700 mb-6">
                     <ul class="flex gap-6 -mb-px">
-                        <li><button onclick="switchTab('tab-inv-ringkasan','inv')" class="tab-btn-inv px-1 pb-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600" data-tab="tab-inv-ringkasan">Ringkasan Stok (FIFO)</button></li>
-                        <li><button onclick="switchTab('tab-inv-inbound','inv')" class="tab-btn-inv px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-inv-inbound">Riwayat Inbound Stok</button></li>
+                        <li><button onclick="switchTab('tab-inv-ringkasan','inv')" class="tab-btn-inv px-1 pb-3 text-sm font-medium border-b-4 border-indigo-600 text-indigo-600" data-tab="tab-inv-ringkasan">Ringkasan Stok (FIFO)</button></li>
+                        <li><button onclick="switchTab('tab-inv-inbound','inv')" class="tab-btn-inv px-1 pb-3 text-sm font-medium border-b-4 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-inv-inbound">Riwayat Inbound Stok</button></li>
+                        <li><button onclick="switchTab('tab-inv-outbound','inv')" class="tab-btn-inv px-1 pb-3 text-sm font-medium border-b-4 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-inv-outbound">Riwayat Outbound Stok Penjualan</button></li>
                     </ul>
                 </div>
 
@@ -382,6 +383,23 @@
                         <div id="pagination-inbound-stok" class="mt-4 flex justify-between items-center text-sm text-slate-500"></div>
                     </div>
                 </div>
+
+                <!-- Tab Content: Riwayat Outbound Stok -->
+                <div id="tab-inv-outbound" class="tab-content-inv hidden">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 p-6">
+                        <h5 class="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">Riwayat Outbound Stok (Penjualan)</h5>
+                        <div class="mb-4"><div class="relative"><i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i><input type="text" id="filter-outbound-history" oninput="filterOutboundHistory()" placeholder="Cari berdasarkan produk, invoice, atau toko..." class="w-full pl-10 pr-4 py-2 bg-transparent border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-slate-900 dark:focus:ring-slate-400 outline-none text-sm"></div></div>
+                        <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
+                            <table class="w-full text-sm text-left whitespace-nowrap">
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30">
+                                    <tr><th class="px-4 py-3 font-medium">Tanggal</th><th class="px-4 py-3 font-medium">No Invoice</th><th class="px-4 py-3 font-medium">Toko</th><th class="px-4 py-3 font-medium">ID Produk</th><th class="px-4 py-3 font-medium">Nama Produk</th><th class="px-4 py-3 font-medium">Qty Keluar</th><th class="px-4 py-3 font-medium">Harga Jual</th><th class="px-4 py-3 font-medium">HPP</th><th class="px-4 py-3 font-medium">Aksi</th></tr>
+                                </thead>
+                                <tbody id="tbody-outbound" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
+                            </table>
+                        </div>
+                        <div id="pagination-outbound" class="mt-4 flex justify-between items-center text-sm text-slate-500"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- MASTER VIEW -->
@@ -389,9 +407,9 @@
                 <h5 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-6">Pengaturan</h5>
                 <div class="border-b border-slate-200 dark:border-slate-700 mb-6">
                     <ul class="flex gap-6 -mb-px">
-                        <li><button onclick="switchTab('tab-set-toko','set')" class="tab-btn-set px-1 pb-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600" data-tab="tab-set-toko">Data Master Toko</button></li>
-                        <li><button onclick="switchTab('tab-set-produk','set')" class="tab-btn-set px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-set-produk">Data Master Produk</button></li>
-                        <li><button onclick="switchTab('tab-set-user','set')" class="tab-btn-set px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-set-user">Manajemen Pengguna</button></li>
+                        <li><button onclick="switchTab('tab-set-toko','set')" class="tab-btn-set px-1 pb-3 text-sm font-medium border-b-4 border-indigo-600 text-indigo-600" data-tab="tab-set-toko">Data Master Toko</button></li>
+                        <li><button onclick="switchTab('tab-set-produk','set')" class="tab-btn-set px-1 pb-3 text-sm font-medium border-b-4 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-set-produk">Data Master Produk</button></li>
+                        <li><button onclick="switchTab('tab-set-user','set')" class="tab-btn-set px-1 pb-3 text-sm font-medium border-b-4 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-set-user">Manajemen Pengguna</button></li>
                     </ul>
                 </div>
                 <div id="tab-set-toko" class="tab-content-set">
@@ -420,6 +438,7 @@
                                 <tbody id="tbody-master-produk" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
                             </table>
                         </div>
+                        <div id="pagination-master-produk" class="mt-4 flex justify-between items-center text-sm text-slate-500"></div>
                     </div>
                 </div>
                 <div id="tab-set-user" class="tab-content-set hidden">
@@ -585,14 +604,15 @@
                             <tbody id="tbody-finance-belum" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
                         </table>
                     </div>
+                    <div id="pagination-finance-belum" class="mt-4 flex justify-between items-center text-sm text-slate-500"></div>
                 </div>
 
                 <!-- BOTTOM: Nav Tabs -->
                 <div class="border-b border-slate-200 dark:border-slate-700 mb-6">
                     <ul class="flex gap-6 -mb-px">
-                        <li><button onclick="switchTab('tab-fin-sudah','fin')" class="tab-btn-fin px-1 pb-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600" data-tab="tab-fin-sudah">Penarikan Dana (Sudah Cair)</button></li>
-                        <li><button onclick="switchTab('tab-fin-pengeluaran','fin')" class="tab-btn-fin px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-fin-pengeluaran">Pengeluaran Operasional</button></li>
-                        <li><button onclick="switchTab('tab-fin-mutasi','fin')" class="tab-btn-fin px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-fin-mutasi">Mutasi Arus Kas</button></li>
+                        <li><button onclick="switchTab('tab-fin-sudah','fin')" class="tab-btn-fin px-1 pb-3 text-sm font-medium border-b-4 border-indigo-600 text-indigo-600" data-tab="tab-fin-sudah">Penarikan Dana (Sudah Cair)</button></li>
+                        <li><button onclick="switchTab('tab-fin-pengeluaran','fin')" class="tab-btn-fin px-1 pb-3 text-sm font-medium border-b-4 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-fin-pengeluaran">Pengeluaran Operasional</button></li>
+                        <li><button onclick="switchTab('tab-fin-mutasi','fin')" class="tab-btn-fin px-1 pb-3 text-sm font-medium border-b-4 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-fin-mutasi">Mutasi Arus Kas</button></li>
                     </ul>
                 </div>
 
@@ -602,10 +622,11 @@
                         <h5 class="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">Riwayat Penarikan Dana (Sudah Cair)</h5>
                         <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
                             <table class="w-full text-sm text-left whitespace-nowrap">
-                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal Withdraw</th><th class="px-4 py-3 font-medium">No Invoice</th><th class="px-4 py-3 font-medium">Marketplace</th><th class="px-4 py-3 font-medium">Toko</th><th class="px-4 py-3 font-medium">Penerimaan Bersih</th></tr></thead>
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal Withdraw</th><th class="px-4 py-3 font-medium">No Invoice</th><th class="px-4 py-3 font-medium">Marketplace</th><th class="px-4 py-3 font-medium">Toko</th><th class="px-4 py-3 font-medium">Penerimaan Bersih</th><th class="px-4 py-3 font-medium">Aksi</th></tr></thead>
                                 <tbody id="tbody-finance-sudah" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
                             </table>
                         </div>
+                        <div id="pagination-finance-sudah" class="mt-4 flex justify-between items-center text-sm text-slate-500"></div>
                     </div>
                 </div>
 
@@ -615,10 +636,11 @@
                         <h5 class="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">Riwayat Pengeluaran Operasional</h5>
                         <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
                             <table class="w-full text-sm text-left whitespace-nowrap">
-                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal</th><th class="px-4 py-3 font-medium">Kategori</th><th class="px-4 py-3 font-medium">Nominal</th><th class="px-4 py-3 font-medium">Keterangan</th><th class="px-4 py-3 font-medium">Aksi</th></tr></thead>
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal</th><th class="px-4 py-3 font-medium">Kategori</th><th class="px-4 py-3 font-medium">Nominal</th><th class="px-4 py-3 font-medium">Keterangan</th><th class="px-4 py-3 font-medium">Rekening</th><th class="px-4 py-3 font-medium">Aksi</th></tr></thead>
                                 <tbody id="tbody-finance-pengeluaran" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
                             </table>
                         </div>
+                        <div id="pagination-pengeluaran" class="mt-4 flex justify-between items-center text-sm text-slate-500"></div>
                     </div>
                 </div>
 
@@ -628,7 +650,7 @@
                         <h5 class="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-100">Mutasi Arus Kas</h5>
                         <div class="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-700">
                             <table class="w-full text-sm text-left whitespace-nowrap">
-                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal</th><th class="px-4 py-3 font-medium">Tipe</th><th class="px-4 py-3 font-medium">Rekening</th><th class="px-4 py-3 font-medium">Keterangan</th><th class="px-4 py-3 font-medium text-right">Masuk (Debit)</th><th class="px-4 py-3 font-medium text-right">Keluar (Kredit)</th><th class="px-4 py-3 font-medium text-right">Saldo</th></tr></thead>
+                                <thead class="text-xs text-indigo-800 dark:text-indigo-300 uppercase bg-indigo-50/60 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800/30"><tr><th class="px-4 py-3 font-medium">Tanggal</th><th class="px-4 py-3 font-medium">Tipe</th><th class="px-4 py-3 font-medium">Rekening</th><th class="px-4 py-3 font-medium">Keterangan</th><th class="px-4 py-3 font-medium text-right">Masuk (Debit)</th><th class="px-4 py-3 font-medium text-right">Keluar (Kredit)</th><th class="px-4 py-3 font-medium text-right">Saldo</th><th class="px-4 py-3 font-medium">Aksi</th></tr></thead>
                                 <tbody id="tbody-mutasi-kas" class="divide-y divide-slate-100 dark:divide-slate-700/50"></tbody>
                             </table>
                         </div>
@@ -766,8 +788,8 @@
                 <!-- Nav Tabs for Riwayat Penjualan -->
                 <div class="border-b border-slate-200 dark:border-slate-700 mb-6">
                     <ul class="flex gap-6 -mb-px">
-                        <li><button onclick="switchTab('tab-hist-summary','hist')" class="tab-btn-hist px-1 pb-3 text-sm font-medium border-b-2 border-indigo-600 text-indigo-600" data-tab="tab-hist-summary">Ringkasan Transaksi</button></li>
-                        <li><button onclick="switchTab('tab-hist-detail','hist')" class="tab-btn-hist px-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-hist-detail">Rincian Barang</button></li>
+                        <li><button onclick="switchTab('tab-hist-summary','hist')" class="tab-btn-hist px-1 pb-3 text-sm font-medium border-b-4 border-indigo-600 text-indigo-600" data-tab="tab-hist-summary">Ringkasan Transaksi</button></li>
+                        <li><button onclick="switchTab('tab-hist-detail','hist')" class="tab-btn-hist px-1 pb-3 text-sm font-medium border-b-4 border-transparent text-slate-500 hover:text-slate-700" data-tab="tab-hist-detail">Rincian Barang</button></li>
                     </ul>
                 </div>
 
